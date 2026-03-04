@@ -157,33 +157,5 @@ spec:
           configMap:
             name: prometheus-config
 
----
-# ── DCGM Exporter (GPU metrics) ──────────────────────────────────────────────
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: dcgm-exporter
-  namespace: fraud-det-v31
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: dcgm-exporter
-  template:
-    metadata:
-      labels:
-        app: dcgm-exporter
-    spec:
-      nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29
-      containers:
-        - name: dcgm-exporter
-          image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
-          ports:
-            - containerPort: 9400
-          securityContext:
-            capabilities:
-              add: ["SYS_ADMIN"]
-          resources:
-            limits:
-              nvidia.com/gpu: "1"
+# NOTE: dcgm-exporter is provided by the gpu-operator in the gpu-operator namespace.
+# prometheus scrapes nvidia-dcgm-exporter.gpu-operator.svc.cluster.local:9400
