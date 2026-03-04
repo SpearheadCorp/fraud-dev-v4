@@ -1,0 +1,14 @@
+# DCGM Exporter field groups configuration
+# Default field set is sufficient for this demo; override here if needed.
+# See: https://github.com/NVIDIA/dcgm-exporter/blob/main/etc/dcp-metrics-included.csv
+
+version: v1
+entities:
+  - type: GPU
+    fields:
+      - id: DCGM_FI_DEV_GPU_UTIL         # GPU utilization (%)
+      - id: DCGM_FI_DEV_MEM_COPY_UTIL    # Memory copy engine utilization (%)
+      - id: DCGM_FI_DEV_FB_FREE          # Frame buffer free memory (MB)
+      - id: DCGM_FI_DEV_FB_USED          # Frame buffer used memory (MB)
+      - id: DCGM_FI_DEV_POWER_USAGE      # Power draw (W)
+      - id: DCGM_FI_DEV_GPU_TEMP         # GPU temperature (C)

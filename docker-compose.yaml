@@ -1,0 +1,144 @@
+services:
+
+  # ── Pod 1: Data Generation ──────────────────────────────────────────────
+  data-gather:
+    build: ./pods/data-gather
+    volumes:
+      - raw_data:/data/raw
+      - stress_config:/data/stress
+    environment:
+      - OUTPUT_PATH=/data/raw
+      - STRESS_CONFIG_PATH=/data/stress/stress.conf
+      - NUM_WORKERS=${NUM_WORKERS:-8}
+      - CHUNK_SIZE=${CHUNK_SIZE:-100000}
+      - RUN_MODE=${RUN_MODE:-once}
+      - TARGET_ROWS=${TARGET_ROWS:-1000000}
+      - FRAUD_RATE=${FRAUD_RATE:-0.005}
+      - KAGGLE_SEED_PATH=${KAGGLE_SEED_PATH:-}
+    profiles: ["pipeline"]
+
+  # ── Pod 2: Feature Engineering ──────────────────────────────────────────
+  data-prep:
+    build: ./pods/data-prep
+    volumes:
+      - raw_data:/data/raw:ro
+      - features_data:/data/features
+    environment:
+      - INPUT_PATH=/data/raw
+      - OUTPUT_PATH=/data/features
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles: ["pipeline"]
+    depends_on:
+      data-gather:
+        condition: service_completed_successfully
+
+  # ── Pod 3: Model Training ────────────────────────────────────────────────
+  model-build:
+    build: ./pods/model-build
+    volumes:
+      - features_data:/data/features:ro
+      - model_repo:/data/models
+    environment:
+      - INPUT_PATH=/data/features
+      - MODEL_REPO=/data/models
+      - MAX_SAMPLES=${MAX_SAMPLES:-500000}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    profiles: ["pipeline"]
+    depends_on:
+      data-prep:
+        condition: service_completed_successfully
+
+  # ── Pod 4: Triton Inference ──────────────────────────────────────────────
+  inference:
+    build: ./pods/inference
+    ports:
+      - "8000:8000"   # HTTP
+      - "8001:8001"   # gRPC
+      - "8002:8002"   # Metrics
+    volumes:
+      - model_repo:/data/models:ro
+    environment:
+      - MODEL_REPO=/data/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/v2/health/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ── Pod 5: Backend + Dashboard ───────────────────────────────────────────
+  backend:
+    build: ./pods/backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # docker compose control
+      - raw_data:/data/raw:ro
+      - features_data:/data/features:ro
+      - model_repo:/data/models:ro
+      - stress_config:/data/stress
+      - ./docker-compose.yaml:/app/docker-compose.yaml:ro
+    environment:
+      - COMPOSE_FILE=/app/docker-compose.yaml
+      - COMPOSE_PROJECT=${COMPOSE_PROJECT:-fraud-det-v31}
+      - PROMETHEUS_URL=http://prometheus:9090
+      - STRESS_CONFIG_PATH=/data/stress/stress.conf
+      - RAW_DATA_PATH=/data/raw
+      - FEATURES_DATA_PATH=/data/features
+      - MODEL_REPO_PATH=/data/models
+    depends_on:
+      - prometheus
+
+  # ── Monitoring: Prometheus ───────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  # ── Monitoring: DCGM Exporter (GPU metrics) ─────────────────────────────
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "9400:9400"
+    cap_add:
+      - SYS_ADMIN
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  raw_data:       # FlashBlade NFS mount in production; named Docker volume for local dev
+  features_data:
+  model_repo:
+  stress_config:
+
+# ── Network ──────────────────────────────────────────────────────────────────
+networks:
+  default:
+    name: fraud-net

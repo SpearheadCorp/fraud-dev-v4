@@ -1,0 +1,24 @@
+# Secrets and local config
+.env
+
+# Seed data (large, not code — scp separately to build VM)
+seed-data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Claude local config
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  # NVIDIA DCGM GPU metrics
+  - job_name: 'dcgm'
+    static_configs:
+      - targets: ['dcgm-exporter:9400']
+
+  # Backend FastAPI app metrics
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:8080']
+    metrics_path: '/metrics'
+
+  # Triton Inference Server metrics
+  - job_name: 'triton'
+    static_configs:
+      - targets: ['inference:8002']

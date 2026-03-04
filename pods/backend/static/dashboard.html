@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fraud Detection Demo v3.1</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #e3b341;
+    --purple: #bc8cff;
+    --teal: #39d353;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; font-weight: 700; color: var(--text); white-space: nowrap; }
+  .live-badge {
+    display: flex; align-items: center; gap: 5px; font-size: 12px;
+    color: var(--green); background: rgba(63, 185, 80, 0.1);
+    padding: 2px 8px; border-radius: 20px; border: 1px solid rgba(63,185,80,0.3);
+  }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .elapsed { color: var(--text-muted); font-size: 12px; }
+  .header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* Buttons */
+  button {
+    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+    cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-danger { background: var(--red); color: #fff; border-color: var(--red); }
+  .btn-danger:hover { filter: brightness(1.1); }
+  .btn-secondary { background: var(--surface); color: var(--text); }
+  .btn-secondary:hover { background: #21262d; }
+  .btn-stress { background: #e3b341; color: #000; border-color: #e3b341; }
+  .btn-stress:hover { filter: brightness(1.1); }
+
+  /* Stress banner */
+  #stress-banner {
+    display: none; background: rgba(227,179,65,0.15); border-bottom: 2px solid var(--orange);
+    text-align: center; padding: 8px; font-weight: 700; font-size: 14px; color: var(--orange);
+    animation: flashBorder 0.8s infinite alternate;
+  }
+  @keyframes flashBorder { from { border-color: var(--orange); } to { border-color: transparent; } }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; background: var(--surface); }
+  .tab-btn {
+    padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 500;
+    border: none; background: none; color: var(--text-muted); border-bottom: 2px solid transparent;
+    transition: all 0.15s; margin-bottom: -1px;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-btn:hover:not(.active) { color: var(--text); }
+
+  /* Tab content */
+  .tab-pane { display: none; padding: 20px; }
+  .tab-pane.active { display: block; }
+
+  /* KPI cards */
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; }
+  .kpi-value { font-size: 24px; font-weight: 700; color: var(--text); }
+  .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .kpi-card.highlight .kpi-value { color: var(--orange); }
+  .kpi-card.good .kpi-value { color: var(--green); }
+  .kpi-card.accent .kpi-value { color: var(--accent); }
+
+  /* Chart grid */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .chart-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 16px;
+  }
+  .chart-card.full-width { grid-column: 1 / -1; }
+  .chart-title { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .chart-container { position: relative; }
+
+  /* Pipeline status */
+  .pipeline-stages {
+    display: flex; gap: 0; align-items: center; margin-bottom: 20px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;
+  }
+  .stage {
+    flex: 1; text-align: center;
+  }
+  .stage-name { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+  .stage-value { font-size: 13px; font-weight: 500; color: var(--text); }
+  .stage-arrow { color: var(--border); font-size: 18px; padding: 0 4px; }
+
+  /* Speedup table */
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(48,54,61,0.5); font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  .speedup-badge {
+    display: inline-block; background: rgba(63,185,80,0.15); color: var(--green);
+    border: 1px solid rgba(63,185,80,0.3); border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: 700;
+  }
+
+  /* Alerts table */
+  .alerts-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .alerts-table th { padding: 6px 8px; color: var(--text-muted); border-bottom: 1px solid var(--border); text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .alerts-table td { padding: 5px 8px; border-bottom: 1px solid rgba(48,54,61,0.4); }
+  .risk-high { color: var(--red); font-weight: 700; }
+  .risk-med { color: var(--orange); }
+
+  /* Connection status */
+  #conn-status { font-size: 11px; color: var(--text-muted); }
+  #conn-status.connected { color: var(--green); }
+  #conn-status.disconnected { color: var(--red); }
+
+  @media (max-width: 640px) {
+    .chart-grid { grid-template-columns: 1fr; }
+    .pipeline-stages { flex-direction: column; gap: 8px; }
+    .stage-arrow { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="stress-banner">⚡ STRESS MODE ACTIVE — Accelerated workload in progress</div>
+
+<header>
+  <h1>Fraud Detection Demo v3.1</h1>
+  <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+  <span class="elapsed" id="elapsed">00:00:00 elapsed</span>
+  <span id="conn-status" class="disconnected">● Connecting...</span>
+  <div class="header-right">
+    <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
+    <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
+    <button class="btn-stress" id="stress-btn" onclick="toggleStress()">⚡ Stress</button>
+    <button class="btn-secondary" onclick="resetPipeline()">↺ Reset</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showTab('business', this)">Business</button>
+  <button class="tab-btn" onclick="showTab('infra', this)">Infrastructure</button>
+  <button class="tab-btn" onclick="showTab('model', this)" id="model-tab-btn">Model / SHAP</button>
+</div>
+
+<!-- ===== BUSINESS TAB ===== -->
+<div id="tab-business" class="tab-pane active">
+  <div class="kpi-row">
+    <div class="kpi-card highlight">
+      <div class="kpi-label">Fraud Exposure</div>
+      <div class="kpi-value" id="kpi-exposure">$0</div>
+      <div class="kpi-sub">estimated at risk</div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">Transactions</div>
+      <div class="kpi-value" id="kpi-txns">0</div>
+      <div class="kpi-sub">generated this run</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Fraud Flagged</div>
+      <div class="kpi-value" id="kpi-flagged">0</div>
+      <div class="kpi-sub" id="kpi-fraud-pct">0.00% rate</div>
+    </div>
+    <div class="kpi-card good">
+      <div class="kpi-label">Annual Savings</div>
+      <div class="kpi-value" id="kpi-savings">$0</div>
+      <div class="kpi-sub">projected</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-title">Fraud by Category</div>
+      <div class="chart-container" style="height:220px"><canvas id="cat-chart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Throughput MB/s</div>
+      <div class="chart-container" style="height:220px"><canvas id="tput-chart"></canvas></div>
+    </div>
+    <div class="chart-card full-width">
+      <div class="chart-title">Recent High-Risk Alerts</div>
+      <table class="alerts-table">
+        <thead>
+          <tr><th>#</th><th>Category</th><th>Est. Amount</th><th>Risk Score</th><th>Time</th></tr>
+        </thead>
+        <tbody id="alerts-body">
+          <tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">Pipeline not running</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== INFRASTRUCTURE TAB ===== -->
+<div id="tab-infra" class="tab-pane">
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">CPU</div>
+      <div class="kpi-value" id="kpi-cpu">0%</div>
+      <div class="kpi-sub">utilization</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">RAM</div>
+      <div class="kpi-value" id="kpi-ram">0%</div>
+      <div class="kpi-sub" id="kpi-ram-sub">0 GB used</div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">GPU 0</div>
+      <div class="kpi-value" id="kpi-gpu0">0%</div>
+      <div class="kpi-sub" id="kpi-gpu0-mem">0% mem</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Workers</div>
+      <div class="kpi-value" id="kpi-workers">—</div>
+      <div class="kpi-sub">data-gather</div>
+    </div>
+  </div>
+
+  <div class="pipeline-stages" id="pipeline-stages">
+    <div class="stage">
+      <div class="stage-name">Gather</div>
+      <div class="stage-value" id="stage-gather">—</div>
+    </div>
+    <div class="stage-arrow">→</div>
+    <div class="stage">
+      <div class="stage-name">Prep</div>
+      <div class="stage-value" id="stage-prep">—</div>
+    </div>
+    <div class="stage-arrow">→</div>
+    <div class="stage">
+      <div class="stage-name">Train</div>
+      <div class="stage-value" id="stage-train">—</div>
+    </div>
+    <div class="stage-arrow">→</div>
+    <div class="stage">
+      <div class="stage-name">Inference</div>
+      <div class="stage-value" id="stage-infer">—</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-title">CPU Utilization %</div>
+      <div class="chart-container" style="height:200px"><canvas id="cpu-chart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">GPU 0 Utilization %</div>
+      <div class="chart-container" style="height:200px"><canvas id="gpu-chart"></canvas></div>
+    </div>
+    <div class="chart-card full-width">
+      <div class="chart-title">CPU vs GPU Speedup</div>
+      <table>
+        <thead><tr><th>Stage</th><th>CPU Time</th><th>GPU Time</th><th>Speedup</th></tr></thead>
+        <tbody id="speedup-table">
+          <tr><td colspan="4" style="color:var(--text-muted)">Pipeline not complete yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-top:0">
+    <div class="chart-title">Storage</div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap">
+      <div><span style="color:var(--text-muted)">Raw files:</span> <strong id="raw-files">0</strong></div>
+      <div><span style="color:var(--text-muted)">Raw size:</span> <strong id="raw-size">0 GB</strong></div>
+      <div><span style="color:var(--text-muted)">Feature files:</span> <strong id="feat-files">0</strong></div>
+      <div><span style="color:var(--text-muted)">Models ready:</span> <strong id="models-ready" style="color:var(--text-muted)">No</strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODEL / SHAP TAB ===== -->
+<div id="tab-model" class="tab-pane">
+  <div class="kpi-row" id="model-kpis">
+    <div class="kpi-card good">
+      <div class="kpi-label">F1 Score</div>
+      <div class="kpi-value" id="kpi-f1">—</div>
+      <div class="kpi-sub">GPU model</div>
+    </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">AUC-PR</div>
+      <div class="kpi-value" id="kpi-auc-pr">—</div>
+      <div class="kpi-sub">area under PR curve</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Precision</div>
+      <div class="kpi-value" id="kpi-prec">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Recall</div>
+      <div class="kpi-value" id="kpi-recall">—</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-title">SHAP Feature Importance (mean |SHAP|)</div>
+      <div class="chart-container" style="height:280px"><canvas id="shap-chart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">CPU vs GPU Training Time</div>
+      <div class="chart-container" style="height:280px"><canvas id="train-time-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div style="margin-top:8px;color:var(--text-muted);font-size:12px" id="shap-status">
+    SHAP data loads automatically after the pipeline completes.
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let ws = null;
+let wsConnected = false;
+let stressActive = false;
+let shapLoaded = false;
+let modelTabOpened = false;
+const MAX_HISTORY = 60;
+
+// Time-series history buffers
+const history = {
+  cpu: [], gpu: [], tput: [], labels: []
+};
+
+// ---------------------------------------------------------------------------
+// Charts
+// ---------------------------------------------------------------------------
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: { duration: 200 },
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(48,54,61,0.5)' } },
+    y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(48,54,61,0.5)' } }
+  }
+};
+
+function makeLineChart(id, label, color, min = 0, max = 100) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '22',
+        borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }]
+    },
+    options: { ...chartDefaults, scales: { ...chartDefaults.scales,
+      x: { ...chartDefaults.scales.x, display: false },
+      y: { ...chartDefaults.scales.y, min, max, suggestedMax: max }
+    }}
+  });
+}
+
+function makeBarChart(id, labels, data, color, horizontal = false) {
+  const ctx = document.getElementById(id);
+  if (!ctx) return null;
+  return new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: color + 'cc', borderRadius: 4 }]
+    },
+    options: {
+      ...chartDefaults,
+      indexAxis: horizontal ? 'y' : 'x',
+      scales: {
+        x: { ...chartDefaults.scales.x, ticks: { color: '#8b949e', font: { size: 10 } } },
+        y: { ...chartDefaults.scales.y, ticks: { color: '#8b949e', font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+const cpuChart = makeLineChart('cpu-chart', 'CPU %', '#58a6ff');
+const gpuChart = makeLineChart('gpu-chart', 'GPU %', '#bc8cff');
+const tputChart = makeLineChart('tput-chart', 'MB/s', '#3fb950', 0, null);
+
+let catChart = null;
+let shapChart = null;
+let trainTimeChart = null;
+
+// Initialise category chart with placeholder
+const ALL_CATS = ['misc_net','grocery_pos','entertainment','gas_transport','misc_pos',
+  'grocery_net','shopping_net','shopping_pos','food_dining','personal_care',
+  'health_fitness','travel','kids_pets','home'];
+catChart = makeBarChart('cat-chart', ALL_CATS.map(c => c.replace('_', ' ')), new Array(14).fill(0), '#e3b341', true);
+
+// ---------------------------------------------------------------------------
+// WebSocket
+// ---------------------------------------------------------------------------
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/dashboard`);
+
+  ws.onopen = () => {
+    wsConnected = true;
+    document.getElementById('conn-status').textContent = '● Connected';
+    document.getElementById('conn-status').className = 'connected';
+  };
+
+  ws.onmessage = (event) => {
+    try { updateDashboard(JSON.parse(event.data)); } catch (e) { console.warn('Parse error', e); }
+  };
+
+  ws.onclose = () => {
+    wsConnected = false;
+    document.getElementById('conn-status').textContent = '● Disconnected';
+    document.getElementById('conn-status').className = 'disconnected';
+    setTimeout(connectWS, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard update
+// ---------------------------------------------------------------------------
+function updateDashboard(data) {
+  // Stress banner
+  const banner = document.getElementById('stress-banner');
+  if (data.stress_mode) {
+    banner.style.display = 'block';
+    stressActive = true;
+    document.getElementById('stress-btn').textContent = '⚡ Stop Stress';
+    document.getElementById('stress-btn').className = 'btn-danger';
+  } else {
+    banner.style.display = 'none';
+    stressActive = false;
+    document.getElementById('stress-btn').textContent = '⚡ Stress';
+    document.getElementById('stress-btn').className = 'btn-stress';
+  }
+
+  // Elapsed
+  const e = data.elapsed_sec || 0;
+  const h = String(Math.floor(e / 3600)).padStart(2, '0');
+  const m = String(Math.floor((e % 3600) / 60)).padStart(2, '0');
+  const s = String(e % 60).padStart(2, '0');
+  document.getElementById('elapsed').textContent = `${h}:${m}:${s} elapsed`;
+
+  // Business KPIs
+  const biz = data.business || {};
+  document.getElementById('kpi-exposure').textContent = '$' + fmtNum(biz.fraud_exposure_usd || 0);
+  document.getElementById('kpi-txns').textContent = fmtNum(biz.total_transactions || 0);
+  document.getElementById('kpi-flagged').textContent = fmtNum(biz.fraud_flagged || 0);
+  document.getElementById('kpi-fraud-pct').textContent = (biz.fraud_rate_pct || 0).toFixed(3) + '% rate';
+  document.getElementById('kpi-savings').textContent = '$' + fmtNum(biz.projected_annual_savings_usd || 0);
+
+  // System KPIs
+  const sys = data.system || {};
+  document.getElementById('kpi-cpu').textContent = (sys.cpu_percent || 0).toFixed(1) + '%';
+  document.getElementById('kpi-ram').textContent = (sys.ram_percent || 0).toFixed(1) + '%';
+  document.getElementById('kpi-ram-sub').textContent = (sys.ram_used_gb || 0).toFixed(1) + ' GB used';
+
+  // GPU KPIs
+  const gpu = data.gpu || {};
+  const gpuUtil = gpu.gpu_0_util_pct || 0;
+  const gpuMem = gpu.gpu_0_mem_pct || 0;
+  document.getElementById('kpi-gpu0').textContent = gpuUtil.toFixed(1) + '%';
+  document.getElementById('kpi-gpu0-mem').textContent = gpuMem.toFixed(1) + '% mem';
+
+  // Workers
+  const gather = (data.pipeline || {}).gather || {};
+  document.getElementById('kpi-workers').textContent = gather.workers || '—';
+
+  // Throughput
+  const tput = gather.throughput_mbps || 0;
+
+  // Update time-series history
+  const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  pushHistory(history.cpu, sys.cpu_percent || 0);
+  pushHistory(history.gpu, gpuUtil);
+  pushHistory(history.tput, tput);
+  pushHistory(history.labels, now);
+
+  updateLineChart(cpuChart, history.labels, history.cpu);
+  updateLineChart(gpuChart, history.labels, history.gpu);
+  updateLineChart(tputChart, history.labels, history.tput);
+
+  // Category fraud estimates (proportional to total fraud, weighted by category)
+  const fraudFlagged = biz.fraud_flagged || 0;
+  const highFraudCats = new Set(['shopping_net', 'travel', 'misc_net']);
+  const catData = ALL_CATS.map(c => {
+    const weight = highFraudCats.has(c) ? 3 : 1;
+    return Math.round(fraudFlagged * weight / (ALL_CATS.length + (highFraudCats.size * 2)));
+  });
+  if (catChart) {
+    catChart.data.datasets[0].data = catData;
+    catChart.update();
+  }
+
+  // Throughput KPI (business tab)
+  // Pipeline stages
+  const prep = (data.pipeline || {}).prep || {};
+  const train = (data.pipeline || {}).train || {};
+
+  document.getElementById('stage-gather').textContent = gather.rows_generated ? fmtNum(gather.rows_generated) + ' rows' : '—';
+  document.getElementById('stage-prep').textContent = prep.rows_processed ? fmtNum(prep.rows_processed) + ' rows' : '—';
+  document.getElementById('stage-train').textContent = train.f1_gpu ? 'F1=' + (train.f1_gpu || 0).toFixed(3) : '—';
+  document.getElementById('stage-infer').textContent = (data.storage || {}).models_ready ? 'Ready' : 'Waiting';
+
+  // Speedup table
+  if (prep.speedup || train.speedup) {
+    const rows = [];
+    if (prep.cpu_time_s) {
+      rows.push(`<tr>
+        <td>Data Prep</td>
+        <td>${prep.cpu_time_s?.toFixed(1)}s</td>
+        <td>${prep.gpu_time_s?.toFixed(1)}s</td>
+        <td><span class="speedup-badge">${prep.speedup?.toFixed(1)}x</span></td>
+      </tr>`);
+    }
+    if (train.cpu_train_time_s) {
+      rows.push(`<tr>
+        <td>Model Train</td>
+        <td>${train.cpu_train_time_s?.toFixed(1)}s</td>
+        <td>${train.gpu_train_time_s?.toFixed(1)}s</td>
+        <td><span class="speedup-badge">${train.speedup?.toFixed(1)}x</span></td>
+      </tr>`);
+    }
+    if (rows.length) document.getElementById('speedup-table').innerHTML = rows.join('');
+  }
+
+  // Storage
+  const stor = data.storage || {};
+  document.getElementById('raw-files').textContent = stor.raw_files || 0;
+  document.getElementById('raw-size').textContent = (stor.raw_size_gb || 0).toFixed(2) + ' GB';
+  document.getElementById('feat-files').textContent = stor.features_files || 0;
+  const mr = document.getElementById('models-ready');
+  mr.textContent = stor.models_ready ? 'Yes' : 'No';
+  mr.style.color = stor.models_ready ? 'var(--green)' : 'var(--text-muted)';
+
+  // Model metrics from telemetry
+  if (train.f1_gpu) {
+    document.getElementById('kpi-f1').textContent = train.f1_gpu.toFixed(3);
+    document.getElementById('kpi-auc-pr').textContent = (train.auc_pr || 0).toFixed(3);
+  }
+
+  // Fake alerts for visual demo
+  if (fraudFlagged > 0) updateAlerts(biz);
+}
+
+// ---------------------------------------------------------------------------
+// Alerts table (synthetic demo rows)
+// ---------------------------------------------------------------------------
+const HIGH_RISK_CATS = ['shopping_net', 'travel', 'misc_net'];
+let alertRows = [];
+function updateAlerts(biz) {
+  if (!biz.fraud_flagged) return;
+  // Generate a new alert row occasionally
+  if (Math.random() < 0.3) {
+    const cat = HIGH_RISK_CATS[Math.floor(Math.random() * HIGH_RISK_CATS.length)];
+    const amt = (Math.random() * 1200 + 100).toFixed(2);
+    const score = (0.75 + Math.random() * 0.24).toFixed(2);
+    const now = new Date().toLocaleTimeString();
+    alertRows.unshift({ cat, amt, score, now });
+    if (alertRows.length > 8) alertRows.pop();
+  }
+  const tbody = document.getElementById('alerts-body');
+  tbody.innerHTML = alertRows.map((r, i) =>
+    `<tr>
+      <td>${i + 1}</td>
+      <td>${r.cat.replace('_', ' ')}</td>
+      <td>$${r.amt}</td>
+      <td class="${r.score > 0.9 ? 'risk-high' : 'risk-med'}">${r.score}</td>
+      <td>${r.now}</td>
+    </tr>`
+  ).join('');
+}
+
+// ---------------------------------------------------------------------------
+// SHAP chart
+// ---------------------------------------------------------------------------
+async function loadShap() {
+  try {
+    const resp = await fetch('/api/metrics/shap');
+    if (!resp.ok) { document.getElementById('shap-status').textContent = 'SHAP data not ready yet — run the pipeline first.'; return; }
+    const data = await resp.json();
+    const features = data.top_features || [];
+    if (!features.length) return;
+
+    document.getElementById('shap-status').textContent = '';
+    const labels = features.map(f => f[0]);
+    const values = features.map(f => f[1]);
+
+    const ctx = document.getElementById('shap-chart');
+    if (!ctx) return;
+    if (shapChart) shapChart.destroy();
+    shapChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ data: values, backgroundColor: '#58a6ff99', borderColor: '#58a6ff', borderWidth: 1, borderRadius: 4 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false }, tooltip: { callbacks: {
+          label: ctx => ' ' + ctx.parsed.x.toFixed(4)
+        }}},
+        scales: {
+          x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(48,54,61,0.5)' }, title: { display: true, text: 'Mean |SHAP|', color: '#8b949e', font: { size: 11 } } },
+          y: { ticks: { color: '#e6edf3', font: { size: 11 } }, grid: { color: 'rgba(48,54,61,0.3)' } }
+        }
+      }
+    });
+
+    shapLoaded = true;
+  } catch (e) { document.getElementById('shap-status').textContent = 'Error loading SHAP: ' + e.message; }
+}
+
+async function loadTrainingMetrics() {
+  try {
+    const resp = await fetch('/api/metrics/training');
+    if (!resp.ok) return;
+    const m = await resp.json();
+    if (m.f1_gpu !== undefined) document.getElementById('kpi-f1').textContent = m.f1_gpu.toFixed(3);
+    if (m.auc_pr !== undefined) document.getElementById('kpi-auc-pr').textContent = m.auc_pr.toFixed(3);
+    if (m.precision !== undefined) document.getElementById('kpi-prec').textContent = m.precision.toFixed(3);
+    if (m.recall !== undefined) document.getElementById('kpi-recall').textContent = m.recall.toFixed(3);
+
+    // Training time comparison chart
+    const ctx = document.getElementById('train-time-chart');
+    if (!ctx) return;
+    if (trainTimeChart) trainTimeChart.destroy();
+    trainTimeChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Data Prep', 'Model Training'],
+        datasets: [
+          { label: 'CPU', data: [m.cpu_prep_time_s || 0, m.cpu_train_time_s || 0], backgroundColor: '#58a6ff88', borderRadius: 4 },
+          { label: 'GPU', data: [m.gpu_prep_time_s || 0, m.gpu_train_time_s || 0], backgroundColor: '#3fb95088', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: true, labels: { color: '#8b949e', font: { size: 11 } } } },
+        scales: {
+          x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,0.5)' } },
+          y: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,0.5)' }, title: { display: true, text: 'Seconds', color: '#8b949e' } }
+        }
+      }
+    });
+  } catch (e) { /* silent */ }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function pushHistory(arr, val) {
+  arr.push(val);
+  if (arr.length > MAX_HISTORY) arr.shift();
+}
+
+function updateLineChart(chart, labels, data) {
+  if (!chart) return;
+  chart.data.labels = [...labels];
+  chart.data.datasets[0].data = [...data];
+  chart.update('none');
+}
+
+function fmtNum(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(Math.round(n));
+}
+
+// ---------------------------------------------------------------------------
+// Tab navigation
+// ---------------------------------------------------------------------------
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+
+  if (name === 'model' && !modelTabOpened) {
+    modelTabOpened = true;
+    loadShap();
+    loadTrainingMetrics();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Control actions
+// ---------------------------------------------------------------------------
+async function startPipeline() {
+  const btn = document.getElementById('start-btn');
+  btn.disabled = true; btn.textContent = '…Starting';
+  try {
+    const r = await fetch('/api/control/start', { method: 'POST' });
+    const d = await r.json();
+    btn.textContent = '▶ Running';
+  } catch (e) { btn.textContent = '▶ Start'; }
+  setTimeout(() => { btn.disabled = false; }, 3000);
+}
+
+async function stopPipeline() {
+  await fetch('/api/control/stop', { method: 'POST' });
+  document.getElementById('start-btn').textContent = '▶ Start';
+}
+
+async function resetPipeline() {
+  if (!confirm('Reset will stop the pipeline and clear raw/feature data. Models are preserved. Continue?')) return;
+  await fetch('/api/control/reset', { method: 'POST' });
+  alertRows = [];
+  document.getElementById('alerts-body').innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">Pipeline not running</td></tr>';
+  document.getElementById('start-btn').textContent = '▶ Start';
+}
+
+async function toggleStress() {
+  if (stressActive) {
+    await fetch('/api/control/stress-stop', { method: 'POST' });
+  } else {
+    await fetch('/api/control/stress', { method: 'POST' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+connectWS();
+// Poll for training metrics once a minute even without tab open
+setInterval(() => { if (modelTabOpened && shapLoaded) loadTrainingMetrics(); }, 60000);
+</script>
+</body>
+</html>

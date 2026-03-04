@@ -1,0 +1,4 @@
+# Force LF line endings for everything (scripts must be LF on Linux build VM)
+* text=auto eol=lf
+*.sh text eol=lf
+Makefile text eol=lf
