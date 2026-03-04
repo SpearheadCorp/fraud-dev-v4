@@ -18,6 +18,8 @@ spec:
       labels:
         app: backend
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-29
       serviceAccountName: backend-sa
       containers:
         - name: backend
@@ -90,6 +92,8 @@ spec:
       labels:
         app: inference
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: inference
           image: 10.23.181.247:5000/fraud-det-v31/inference:latest
@@ -137,6 +141,8 @@ spec:
       labels:
         app: prometheus
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: prometheus
           image: prom/prometheus:v2.51.0
@@ -168,6 +174,8 @@ spec:
       labels:
         app: dcgm-exporter
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: dcgm-exporter
           image: nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04
