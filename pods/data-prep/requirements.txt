@@ -1,4 +1,2 @@
-pandas>=2.1.0
-numpy>=1.26.0
-pyarrow>=14.0.0
+# pandas, numpy, pyarrow already in RAPIDS conda env — don't reinstall via pip
 psutil>=5.9.0
