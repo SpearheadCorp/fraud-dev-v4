@@ -271,7 +271,7 @@ def main() -> None:
         version_dir = model_dir / "1"
         version_dir.mkdir(parents=True, exist_ok=True)
 
-        model_json_path = version_dir / "model.json"
+        model_json_path = version_dir / "xgboost.json"
         model_obj.get_booster().save_model(str(model_json_path))
 
         # Validate file exists at correct path
