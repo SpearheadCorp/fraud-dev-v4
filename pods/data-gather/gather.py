@@ -48,13 +48,16 @@ signal.signal(signal.SIGINT, _handle_signal)
 # ---------------------------------------------------------------------------
 OUTPUT_PATH = Path(os.environ.get("OUTPUT_PATH", "/data/raw"))
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", str(max(1, (os.cpu_count() or 2) // 2))))
-CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "100000"))
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "10000"))
 FRAUD_RATE = float(os.environ.get("FRAUD_RATE", "0.005"))
 TARGET_ROWS = int(os.environ.get("TARGET_ROWS", "1000000"))
 RUN_MODE = os.environ.get("RUN_MODE", "once")
 STRESS_MODE = os.environ.get("STRESS_MODE", "false").lower() == "true"
 KAGGLE_SEED_PATH = os.environ.get("KAGGLE_SEED_PATH", "")
 STRESS_CONFIG_PATH = Path(os.environ.get("STRESS_CONFIG_PATH", "/data/stress/stress.conf"))
+# Rate governor: target rows/sec with asymmetric jitter for realistic variation.
+# 0 = unlimited (run as fast as possible). Overridden per-job via env.
+TARGET_ROWS_PER_SEC = int(os.environ.get("TARGET_ROWS_PER_SEC", "0"))
 
 # ---------------------------------------------------------------------------
 # Domain constants
@@ -457,7 +460,13 @@ def main() -> None:
         chunk_size = chunk_size * 2
         log.info("[INFO] STRESS_MODE=true: workers=%d, chunk_size=%d", num_workers, chunk_size)
 
-    log.info("[INFO] Starting data-gather: mode=%s workers=%d chunk_size=%d", RUN_MODE, num_workers, chunk_size)
+    log.info("[INFO] Starting data-gather: mode=%s workers=%d chunk_size=%d target_rows_per_sec=%d",
+             RUN_MODE, num_workers, chunk_size, TARGET_ROWS_PER_SEC)
+
+    # Rate governor: seconds each chunk-slot should occupy.
+    # Asymmetric jitter: triangular(0.55, 0.92, 1.15) — biased low to mimic
+    # real-world bursty patterns (occasional slow periods, rare brief spikes).
+    target_chunk_time = (chunk_size / TARGET_ROWS_PER_SEC) if TARGET_ROWS_PER_SEC > 0 else 0.0
 
     total_rows = 0
     total_bytes = 0.0
@@ -486,6 +495,7 @@ def main() -> None:
                 if _SHUTDOWN:
                     break
 
+                chunk_start = time.time()
                 chunks_since_disk_check += 1
                 if chunks_since_disk_check >= 10:
                     chunks_since_disk_check = 0
@@ -520,6 +530,15 @@ def main() -> None:
                     rows_at_last_telemetry = total_rows
                     last_telemetry = now
 
+                # Rate governor: sleep to hit target rate with asymmetric jitter.
+                # triangular(0.55, 0.92, 1.15): biased slightly below target —
+                # occasional dips to 55%, rare bursts to 115%, typical ~92%.
+                if target_chunk_time > 0:
+                    jitter = np.random.triangular(0.55, 0.92, 1.15)
+                    sleep_for = target_chunk_time * jitter - (time.time() - chunk_start)
+                    if sleep_for > 0:
+                        time.sleep(sleep_for)
+
         else:
             # Continuous mode — loop, hot-reload stress config
             chunk_id = 0
@@ -546,6 +565,7 @@ def main() -> None:
                     if _SHUTDOWN:
                         break
 
+                    chunk_start = time.time()
                     chunks_since_disk_check += 1
                     if chunks_since_disk_check >= 10:
                         chunks_since_disk_check = 0
@@ -580,6 +600,12 @@ def main() -> None:
                                        elapsed_since_last=now - last_telemetry)
                         rows_at_last_telemetry = total_rows
                         last_telemetry = now
+
+                    if target_chunk_time > 0:
+                        jitter = np.random.triangular(0.55, 0.92, 1.15)
+                        sleep_for = target_chunk_time * jitter - (time.time() - chunk_start)
+                        if sleep_for > 0:
+                            time.sleep(sleep_for)
 
                 if not _SHUTDOWN:
                     time.sleep(0.05)

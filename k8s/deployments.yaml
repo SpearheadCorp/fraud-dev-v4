@@ -53,16 +53,12 @@ spec:
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
-              readOnly: true
             - name: features-data
               mountPath: /data/features
-              readOnly: true
             - name: features-cpu-data
               mountPath: /data/features-cpu
-              readOnly: true
             - name: model-repo
               mountPath: /data/models
-              readOnly: true
           readinessProbe:
             httpGet:
               path: /api/status

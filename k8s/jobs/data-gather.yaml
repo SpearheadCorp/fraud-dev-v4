@@ -28,11 +28,13 @@ spec:
             - name: RUN_MODE
               value: once
             - name: NUM_WORKERS
-              value: "8"
+              value: "2"
             - name: CHUNK_SIZE
-              value: "100000"
+              value: "10000"
             - name: TARGET_ROWS
               value: "1000000"
+            - name: TARGET_ROWS_PER_SEC
+              value: "10000"
             - name: KAGGLE_SEED_PATH
               value: /app/seed-data/credit_card_transactions.csv.zip
           volumeMounts:

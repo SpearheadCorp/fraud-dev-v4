@@ -244,17 +244,27 @@ def get_service_states() -> dict:
     return states
 
 
-def write_stress_config(stress_on: bool, num_workers: int = 32, chunk_size: int = 100000) -> None:
-    """Re-submit data-gather Job with stress env vars."""
+def write_stress_config(stress_on: bool) -> None:
+    """Re-submit data-gather Job in stress (continuous, 8 workers, 100K/s) or
+    normal (once, 2 workers, 10K/s) mode. Rate is governed in gather.py via
+    TARGET_ROWS_PER_SEC with asymmetric jitter for realistic variation."""
     batch_v1, _, _ = _k8s()
-    # NOTE: do NOT set STRESS_MODE=true — gather.py would multiply NUM_WORKERS × 4
-    # making it 128+ workers. Control throughput directly via NUM_WORKERS only.
-    overrides = {
-        "NUM_WORKERS": str(num_workers if stress_on else 8),
-        "CHUNK_SIZE": str(chunk_size),
-        "TARGET_ROWS": str(5000000 if stress_on else 1000000),
-        "RUN_MODE": "continuous" if stress_on else "once",
-    }
+    if stress_on:
+        overrides = {
+            "NUM_WORKERS": "8",
+            "CHUNK_SIZE": "10000",
+            "TARGET_ROWS": "5000000",
+            "TARGET_ROWS_PER_SEC": "100000",
+            "RUN_MODE": "continuous",
+        }
+    else:
+        overrides = {
+            "NUM_WORKERS": "2",
+            "CHUNK_SIZE": "10000",
+            "TARGET_ROWS": "1000000",
+            "TARGET_ROWS_PER_SEC": "10000",
+            "RUN_MODE": "once",
+        }
     try:
         _create_job(batch_v1, "data-gather.yaml", overrides)
         log.info("[INFO] Stress data-gather Job submitted: stress=%s", stress_on)
