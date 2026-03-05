@@ -55,9 +55,28 @@ class PipelineState:
         return int(time.time() - self.start_time)
 
 
+_TELEMETRY_CACHE = MODEL_REPO / "last_telemetry.json"
+
+
 class MetricsCollector:
     def __init__(self, state: PipelineState) -> None:
         self.state = state
+        self._load_telemetry_cache()
+
+    def _load_telemetry_cache(self) -> None:
+        try:
+            if _TELEMETRY_CACHE.exists():
+                self.state.last_telemetry = json.loads(_TELEMETRY_CACHE.read_text())
+                log.info("[INFO] Loaded telemetry cache (%d stages)", len(self.state.last_telemetry))
+        except Exception as exc:
+            log.debug("[DEBUG] load_telemetry_cache: %s", exc)
+
+    def _save_telemetry_cache(self) -> None:
+        try:
+            _TELEMETRY_CACHE.parent.mkdir(parents=True, exist_ok=True)
+            _TELEMETRY_CACHE.write_text(json.dumps(self.state.last_telemetry))
+        except Exception as exc:
+            log.debug("[DEBUG] save_telemetry_cache: %s", exc)
 
     # ------------------------------------------------------------------
     # Public API
@@ -71,9 +90,11 @@ class MetricsCollector:
         storage = self._collect_storage()
         flashblade = self._collect_flashblade()
 
-        # Cache latest telemetry for KPI continuity
+        # Cache latest telemetry for KPI continuity; persist so backend restarts
+        # don't lose stage values after job pods are cleaned up.
         if telemetry:
             self.state.last_telemetry = telemetry
+            self._save_telemetry_cache()
 
         return {
             "is_running": self.state.is_running,

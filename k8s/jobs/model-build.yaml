@@ -8,7 +8,7 @@ metadata:
     stage: train
 spec:
   backoffLimit: 0
-  ttlSecondsAfterFinished: 600
+  ttlSecondsAfterFinished: 3600
   template:
     metadata:
       labels:
