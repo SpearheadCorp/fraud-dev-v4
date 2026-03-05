@@ -137,7 +137,12 @@ class MetricsCollector:
                     result[stage] = kv   # latest line wins per stage
                 except Exception as exc:
                     log.debug("[DEBUG] telemetry parse error on line %r: %s", line, exc)
-        return result if result else self.state.last_telemetry
+        # Fill any missing stages from last known values so a job restart
+        # (e.g. stress re-submitting data-gather) doesn't zero out live gauges.
+        for stage, cached in self.state.last_telemetry.items():
+            if stage not in result:
+                result[stage] = cached
+        return result
 
     # ------------------------------------------------------------------
     # System metrics (psutil)

@@ -728,15 +728,50 @@ async function startPipeline() {
 }
 
 async function stopPipeline() {
-  await fetch('/api/control/stop', { method: 'POST' });
-  document.getElementById('start-btn').textContent = '▶ Start';
+  const btn = document.getElementById('stop-btn');
+  btn.disabled = true; btn.textContent = '…Stopping';
+  try {
+    await fetch('/api/control/stop', { method: 'POST' });
+    document.getElementById('start-btn').textContent = '▶ Start';
+  } finally {
+    btn.disabled = false; btn.textContent = '■ Stop';
+  }
 }
 
 async function resetPipeline() {
   if (!confirm('Reset will stop the pipeline and clear raw/feature data. Models are preserved. Continue?')) return;
   await fetch('/api/control/reset', { method: 'POST' });
+
+  // Clear alerts
   alertRows = [];
   document.getElementById('alerts-body').innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">Pipeline not running</td></tr>';
+
+  // Clear stage labels
+  document.getElementById('stage-gather').textContent = '—';
+  document.getElementById('stage-prep').textContent = '—';
+  document.getElementById('stage-train').textContent = '—';
+
+  // Clear speedup table
+  document.getElementById('speedup-table').innerHTML = '';
+
+  // Clear KPIs
+  ['kpi-f1','kpi-auc-pr','kpi-prec','kpi-recall'].forEach(id => {
+    document.getElementById(id).textContent = '—';
+  });
+
+  // Clear time-series chart histories
+  history.cpu.length = 0; history.gpu.length = 0;
+  history.tput.length = 0; history.labels.length = 0;
+  updateLineChart(cpuChart, [], []);
+  updateLineChart(gpuChart, [], []);
+  updateLineChart(tputChart, [], []);
+
+  // Destroy model charts so they reload fresh next pipeline run
+  if (trainTimeChart) { trainTimeChart.destroy(); trainTimeChart = null; }
+  if (shapChart) { shapChart.destroy(); shapChart = null; }
+  shapLoaded = false;
+  document.getElementById('shap-status').textContent = 'SHAP data not ready yet — run the pipeline first.';
+
   document.getElementById('start-btn').textContent = '▶ Start';
 }
 
