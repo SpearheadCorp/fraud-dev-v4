@@ -508,7 +508,7 @@ def main() -> None:
                 actual_fraud_rate = float(df_chunk["is_fraud"].mean())
 
                 now = time.time()
-                if now - last_telemetry >= 5.0:
+                if now - last_telemetry >= 1.0:
                     emit_telemetry(total_rows, total_bytes, files_written,
                                    num_workers, actual_fraud_rate, start_time)
                     last_telemetry = now
@@ -566,7 +566,7 @@ def main() -> None:
                     actual_fraud_rate = float(df_chunk["is_fraud"].mean())
 
                     now = time.time()
-                    if now - last_telemetry >= 5.0:
+                    if now - last_telemetry >= 1.0:
                         emit_telemetry(total_rows, total_bytes, files_written,
                                        num_workers, actual_fraud_rate, start_time)
                         last_telemetry = now

@@ -244,13 +244,14 @@ def get_service_states() -> dict:
     return states
 
 
-def write_stress_config(stress_on: bool, num_workers: int = 32, chunk_size: int = 200000) -> None:
+def write_stress_config(stress_on: bool, num_workers: int = 32, chunk_size: int = 100000) -> None:
     """Re-submit data-gather Job with stress env vars."""
     batch_v1, _, _ = _k8s()
+    # NOTE: do NOT set STRESS_MODE=true — gather.py would multiply NUM_WORKERS × 4
+    # making it 128+ workers. Control throughput directly via NUM_WORKERS only.
     overrides = {
-        "STRESS_MODE": "true" if stress_on else "false",
         "NUM_WORKERS": str(num_workers if stress_on else 8),
-        "CHUNK_SIZE": str(chunk_size if stress_on else 100000),
+        "CHUNK_SIZE": str(chunk_size),
         "TARGET_ROWS": str(5000000 if stress_on else 1000000),
         "RUN_MODE": "continuous" if stress_on else "once",
     }
