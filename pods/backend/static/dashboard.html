@@ -376,7 +376,7 @@ const MAX_HISTORY = 60;
 const history = {
   cpu: [], gpu: [], tput: [], tx: [], fbLatency: [], labels: []
 };
-let prevRowsGenerated = 0;
+// prevRowsGenerated removed — TX/s now comes from gather.rows_per_sec directly
 
 // ---------------------------------------------------------------------------
 // Charts
@@ -567,10 +567,8 @@ function updateDashboard(data) {
 
   // Update time-series history
   const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  // Reset baseline when job restarts (rows_generated drops — new job started)
-  if ((gather.rows_generated || 0) < prevRowsGenerated) prevRowsGenerated = 0;
-  const txRate = Math.max(0, (gather.rows_generated || 0) - prevRowsGenerated);
-  prevRowsGenerated = gather.rows_generated || 0;
+  // rows_per_sec is emitted directly by gather.py (instantaneous 1s window rate)
+  const txRate = gather.rows_per_sec || 0;
 
   pushHistory(history.cpu, sys.cpu_percent || 0);
   pushHistory(history.gpu, gpuUtil);
@@ -868,7 +866,6 @@ async function resetPipeline() {
   // Clear time-series chart histories
   history.cpu.length = 0; history.gpu.length = 0;
   history.tput.length = 0; history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
-  prevRowsGenerated = 0;
   updateLineChart(cpuChart, [], []);
   updateLineChart(gpuChart, [], []);
   updateLineChart(tputChart, [], []);

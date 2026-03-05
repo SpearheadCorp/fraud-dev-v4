@@ -419,11 +419,14 @@ def load_stress_config() -> dict:
 
 
 def emit_telemetry(total_rows: int, total_bytes: float, files_written: int,
-                   num_workers: int, fraud_rate: float, start_time: float) -> None:
+                   num_workers: int, fraud_rate: float, start_time: float,
+                   rows_since_last: int = 0, elapsed_since_last: float = 1.0) -> None:
     elapsed = max(time.time() - start_time, 0.001)
     throughput_mbps = (total_bytes / 1e6) / elapsed
+    rows_per_sec = int(rows_since_last / max(elapsed_since_last, 0.001))
     sys.stdout.write(
         f"[TELEMETRY] stage=gather rows_generated={total_rows} "
+        f"rows_per_sec={rows_per_sec} "
         f"throughput_mbps={throughput_mbps:.1f} files_written={files_written} "
         f"workers={num_workers} fraud_rate={fraud_rate:.4f}\n"
     )
@@ -462,6 +465,7 @@ def main() -> None:
     chunks_since_disk_check = 0
     start_time = time.time()
     last_telemetry = start_time
+    rows_at_last_telemetry = 0
     actual_fraud_rate = dist.get("fraud_rate", FRAUD_RATE)
 
     with multiprocessing.Pool(
@@ -510,7 +514,10 @@ def main() -> None:
                 now = time.time()
                 if now - last_telemetry >= 1.0:
                     emit_telemetry(total_rows, total_bytes, files_written,
-                                   num_workers, actual_fraud_rate, start_time)
+                                   num_workers, actual_fraud_rate, start_time,
+                                   rows_since_last=total_rows - rows_at_last_telemetry,
+                                   elapsed_since_last=now - last_telemetry)
+                    rows_at_last_telemetry = total_rows
                     last_telemetry = now
 
         else:
@@ -568,7 +575,10 @@ def main() -> None:
                     now = time.time()
                     if now - last_telemetry >= 1.0:
                         emit_telemetry(total_rows, total_bytes, files_written,
-                                       num_workers, actual_fraud_rate, start_time)
+                                       num_workers, actual_fraud_rate, start_time,
+                                       rows_since_last=total_rows - rows_at_last_telemetry,
+                                       elapsed_since_last=now - last_telemetry)
+                        rows_at_last_telemetry = total_rows
                         last_telemetry = now
 
                 if not _SHUTDOWN:
