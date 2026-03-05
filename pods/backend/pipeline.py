@@ -246,6 +246,7 @@ def write_stress_config(stress_on: bool, num_workers: int = 32, chunk_size: int 
         "NUM_WORKERS": str(num_workers if stress_on else 8),
         "CHUNK_SIZE": str(chunk_size if stress_on else 100000),
         "TARGET_ROWS": str(5000000 if stress_on else 1000000),
+        "RUN_MODE": "continuous" if stress_on else "once",
     }
     try:
         _create_job(batch_v1, "data-gather.yaml", overrides)

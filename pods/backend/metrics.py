@@ -1,5 +1,6 @@
 """
-Metrics collection: telemetry (K8s pod logs), system (psutil), GPU (Prometheus/DCGM).
+Metrics collection: telemetry (K8s pod logs), system (psutil), GPU (Prometheus/DCGM),
+FlashBlade storage latency (Prometheus/purefb exporter).
 """
 import os
 import json
@@ -21,6 +22,7 @@ RAW_PATH = Path(os.environ.get("RAW_DATA_PATH", "/data/raw"))
 FEATURES_PATH = Path(os.environ.get("FEATURES_DATA_PATH", "/data/features"))
 FEATURES_CPU_PATH = Path(os.environ.get("FEATURES_CPU_DATA_PATH", "/data/features-cpu"))
 NAMESPACE = os.environ.get("K8S_NAMESPACE", "fraud-det-v31")
+FLASHBLADE_FS_NAME = os.environ.get("FLASHBLADE_FS_NAME", "financial-fraud-detection-demo")
 
 
 def _core_v1() -> client.CoreV1Api:
@@ -67,6 +69,7 @@ class MetricsCollector:
         gpu = self._collect_gpu()
         business = self._compute_kpis(telemetry)
         storage = self._collect_storage()
+        flashblade = self._collect_flashblade()
 
         # Cache latest telemetry for KPI continuity
         if telemetry:
@@ -87,6 +90,7 @@ class MetricsCollector:
             },
             "business": business,
             "storage": storage,
+            "flashblade": flashblade,
         }
 
     # ------------------------------------------------------------------
@@ -189,6 +193,32 @@ class MetricsCollector:
     @staticmethod
     def _gpu_zeros() -> dict:
         return {"gpu_0_util_pct": 0.0, "gpu_0_mem_pct": 0.0}
+
+    # ------------------------------------------------------------------
+    # FlashBlade latency via Prometheus purefb exporter
+    # ------------------------------------------------------------------
+
+    def _collect_flashblade(self) -> dict:
+        """Query Prometheus/purefb exporter for FlashBlade file-system read/write latency."""
+        try:
+            out: dict = {}
+            for metric, dim, key in [
+                ("purefb_file_systems_performance_latency_usec", "read",  "read_latency_ms"),
+                ("purefb_file_systems_performance_latency_usec", "write", "write_latency_ms"),
+            ]:
+                query = f'{metric}{{name="{FLASHBLADE_FS_NAME}",dimension="{dim}"}}'
+                resp = requests.get(
+                    f"{PROMETHEUS_URL}/api/v1/query",
+                    params={"query": query},
+                    timeout=3,
+                )
+                resp.raise_for_status()
+                result = resp.json().get("data", {}).get("result", [])
+                out[key] = round(float(result[0]["value"][1]) / 1000, 2) if result else 0.0
+            return out
+        except Exception as exc:
+            log.debug("[DEBUG] _collect_flashblade: %s", exc)
+            return {"read_latency_ms": 0.0, "write_latency_ms": 0.0}
 
     # ------------------------------------------------------------------
     # Business KPIs derived from telemetry
