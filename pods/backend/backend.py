@@ -104,6 +104,9 @@ async def reset_pipeline():
 async def start_stress():
     pl.write_stress_config(stress_on=True, num_workers=32, chunk_size=200000)
     state.stress_mode = True
+    # Clear stale gather rows_generated so the dashboard TX/s delta doesn't
+    # compare the new job's row count against the old job's large count.
+    state.last_telemetry.pop("gather", None)
     return {"status": "stress mode activated"}
 
 
@@ -111,6 +114,7 @@ async def start_stress():
 async def stop_stress():
     pl.write_stress_config(stress_on=False)
     state.stress_mode = False
+    state.last_telemetry.pop("gather", None)
     return {"status": "stress mode deactivated"}
 
 

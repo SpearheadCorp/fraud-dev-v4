@@ -51,14 +51,20 @@ def _delete_job_if_exists(batch_v1: client.BatchV1Api, job_name: str) -> None:
         batch_v1.delete_namespaced_job(
             name=job_name,
             namespace=NAMESPACE,
-            body=client.V1DeleteOptions(propagation_policy="Foreground"),
+            body=client.V1DeleteOptions(propagation_policy="Background"),
         )
-        log.info("[INFO] Deleted existing Job: %s", job_name)
-        time.sleep(3)  # brief wait for Foreground deletion propagation
+        log.info("[INFO] Deleting Job: %s — waiting for removal", job_name)
+        for _ in range(30):          # poll up to 30 s
+            time.sleep(1)
+            try:
+                batch_v1.read_namespaced_job(name=job_name, namespace=NAMESPACE)
+            except ApiException as ex:
+                if ex.status == 404:
+                    return            # gone — safe to create new job
+        log.warning("[WARN] Job %s still present after 30s — proceeding anyway", job_name)
     except ApiException as e:
         if e.status != 404:
             log.warning("[WARN] delete Job %s: %s", job_name, e.reason)
-        # 404 = job didn't exist — no sleep needed
 
 
 def _create_job(batch_v1: client.BatchV1Api, yaml_name: str, env_overrides: dict = None) -> None:

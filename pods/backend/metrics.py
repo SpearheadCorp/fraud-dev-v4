@@ -23,6 +23,7 @@ FEATURES_PATH = Path(os.environ.get("FEATURES_DATA_PATH", "/data/features"))
 FEATURES_CPU_PATH = Path(os.environ.get("FEATURES_CPU_DATA_PATH", "/data/features-cpu"))
 NAMESPACE = os.environ.get("K8S_NAMESPACE", "fraud-det-v31")
 FLASHBLADE_FS_NAME = os.environ.get("FLASHBLADE_FS_NAME", "financial-fraud-detection-demo")
+GPU_NODE_HOSTNAME = os.environ.get("GPU_NODE_HOSTNAME", "slc6-lg-n3-b30-29")
 
 
 def _core_v1() -> client.CoreV1Api:
@@ -198,8 +199,10 @@ class MetricsCollector:
                 ("DCGM_FI_DEV_GPU_UTIL", "gpu_{}_util_pct"),
                 ("DCGM_FI_DEV_MEM_COPY_UTIL", "gpu_{}_mem_pct"),
             ]:
+                query = (f'{metric_name}{{Hostname="{GPU_NODE_HOSTNAME}"}}'
+                         if GPU_NODE_HOSTNAME else metric_name)
                 url = f"{PROMETHEUS_URL}/api/v1/query"
-                resp = requests.get(url, params={"query": metric_name}, timeout=3)
+                resp = requests.get(url, params={"query": query}, timeout=3)
                 resp.raise_for_status()
                 data = resp.json()
                 for result in data.get("data", {}).get("result", []):

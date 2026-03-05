@@ -567,6 +567,8 @@ function updateDashboard(data) {
 
   // Update time-series history
   const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // Reset baseline when job restarts (rows_generated drops — new job started)
+  if ((gather.rows_generated || 0) < prevRowsGenerated) prevRowsGenerated = 0;
   const txRate = Math.max(0, (gather.rows_generated || 0) - prevRowsGenerated);
   prevRowsGenerated = gather.rows_generated || 0;
 
