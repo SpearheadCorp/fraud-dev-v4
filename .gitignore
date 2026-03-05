@@ -2,6 +2,12 @@
 .env
 LAB_ENVIRONMENT.md
 
+# Agent handover docs (local only)
+CLAUDE.md
+ARCHITECTURE.md
+TODO.md
+MEMORY.md
+
 # Seed data zip (large binary — scp to build VM separately, not in git)
 seed-data/*.zip
 
