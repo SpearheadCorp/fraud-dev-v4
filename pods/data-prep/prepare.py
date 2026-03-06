@@ -9,11 +9,7 @@ import sys
 import time
 import logging
 import signal
-import faulthandler
 from pathlib import Path
-
-# Dump C stack on SIGSEGV so we can see exactly where cuDF crashes
-faulthandler.enable()
 
 import numpy as np
 import pandas as pd
@@ -54,9 +50,9 @@ def _probe_gpu() -> bool:
     try:
         r = subprocess.run(
             [sys.executable, "-c",
-             "import cudf, cupy as cp, pandas as pd; "
-             "cp.cuda.runtime.getDeviceCount(); "
-             "cudf.from_pandas(pd.DataFrame({'a': [1.0]})); "
+             "import cudf, numpy as np, pandas as pd; "
+             "gdf = cudf.from_pandas(pd.DataFrame({'a': [1.0], 'b': [2.0]})); "
+             "np.log1p(gdf['a']); np.radians(gdf['b']); np.sin(gdf['b']); "
              "print('ok')"],
             capture_output=True, timeout=30,
         )
@@ -65,13 +61,9 @@ def _probe_gpu() -> bool:
         return False
 
 if _probe_gpu():
-    log.info("[DIAG] probe passed — attempting import cudf in main process")
     import cudf
-    log.info("[DIAG] cudf imported OK — importing cupy")
-    import cupy as cp
-    log.info("[DIAG] cupy imported OK — GPU path enabled")
     GPU_AVAILABLE = True
-    log.info("[INFO] cudf/cupy found — GPU path enabled")
+    log.info("[INFO] cudf found — GPU path enabled")
 else:
     GPU_AVAILABLE = False
     log.warning("[WARN] GPU probe failed — running CPU-only path")
@@ -212,7 +204,7 @@ def engineer_features_gpu(df: pd.DataFrame) -> tuple:
     gdf = cudf.from_pandas(df)
 
     t1 = time.perf_counter()
-    gdf["amt_log"] = cp.log1p(gdf["amt"].to_cupy())
+    gdf["amt_log"] = np.log1p(gdf["amt"])
     amt_mean = float(gdf["amt"].mean())
     amt_std = float(gdf["amt"].std())
     gdf["amt_scaled"] = (gdf["amt"] - amt_mean) / max(amt_std, 1e-9)
@@ -228,14 +220,14 @@ def engineer_features_gpu(df: pd.DataFrame) -> tuple:
 
     t1 = time.perf_counter()
     R = 6371.0
-    lat1 = cp.radians(gdf["lat"].to_cupy())
-    lon1 = cp.radians(gdf["long"].to_cupy())
-    lat2 = cp.radians(gdf["merch_lat"].to_cupy())
-    lon2 = cp.radians(gdf["merch_long"].to_cupy())
+    lat1 = np.radians(gdf["lat"])
+    lon1 = np.radians(gdf["long"])
+    lat2 = np.radians(gdf["merch_lat"])
+    lon2 = np.radians(gdf["merch_long"])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    a = cp.sin(dlat / 2) ** 2 + cp.cos(lat1) * cp.cos(lat2) * cp.sin(dlon / 2) ** 2
-    gdf["distance_km"] = 2 * R * cp.arcsin(cp.sqrt(cp.clip(a, 0.0, 1.0)))
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    gdf["distance_km"] = 2 * R * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
     t["distance"] = time.perf_counter() - t1
 
     t1 = time.perf_counter()
@@ -247,7 +239,7 @@ def engineer_features_gpu(df: pd.DataFrame) -> tuple:
     t["encoding"] = time.perf_counter() - t1
 
     t1 = time.perf_counter()
-    gdf["city_pop_log"] = cp.log1p(gdf["city_pop"].to_cupy())
+    gdf["city_pop_log"] = np.log1p(gdf["city_pop"])
     gdf["zip_region"] = (gdf["zip"] // 10000).astype("int8")
     t["misc"] = time.perf_counter() - t1
 
