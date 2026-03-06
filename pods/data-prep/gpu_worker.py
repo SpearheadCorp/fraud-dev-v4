@@ -46,13 +46,38 @@ FEATURE_COLS = [
 ]
 
 
+_NUMERIC_COLS = [
+    "amt", "unix_time", "lat", "long", "merch_lat", "merch_long",
+    "city_pop", "zip", "merch_zipcode", "is_fraud",
+]
+_GPU_FEATURE_COLS = [
+    "amt_log", "amt_scaled", "hour_of_day", "day_of_week", "is_weekend",
+    "is_night", "distance_km", "city_pop_log", "zip_region",
+    "amt", "lat", "long", "city_pop", "unix_time",
+    "merch_lat", "merch_long", "merch_zipcode", "zip", "is_fraud",
+]
+
+
 def _engineer(df: pd.DataFrame, cudf) -> tuple:
-    """Core GPU feature engineering. cudf passed as arg (imported in caller)."""
+    """Core GPU feature engineering. cudf passed as arg (imported in caller).
+
+    Categorical strings are encoded in pandas to avoid cuDF string handling.
+    Only numeric columns are transferred to GPU for vectorised operations.
+    """
     t: dict = {}
     t0 = time.perf_counter()
 
-    gdf = cudf.from_pandas(df)
+    # --- Categorical encodings in pandas (fast; avoids cuDF string ops) ---
+    t1 = time.perf_counter()
+    category_encoded = df["category"].map(CATEGORY_MAP).fillna(0).astype(np.int8)
+    state_encoded = df["state"].map(STATE_MAP).fillna(0).astype(np.int8)
+    gender_encoded = (df["gender"] == "F").astype(np.int8)
+    t["encoding"] = time.perf_counter() - t1
 
+    # --- Transfer numeric-only columns to GPU ---
+    gdf = cudf.from_pandas(df[_NUMERIC_COLS])
+
+    # --- Amount features ---
     t1 = time.perf_counter()
     gdf["amt_log"] = np.log1p(gdf["amt"])
     amt_mean = float(gdf["amt"].mean())
@@ -60,6 +85,7 @@ def _engineer(df: pd.DataFrame, cudf) -> tuple:
     gdf["amt_scaled"] = (gdf["amt"] - amt_mean) / max(amt_std, 1e-9)
     t["amount"] = time.perf_counter() - t1
 
+    # --- Temporal features ---
     t1 = time.perf_counter()
     ts = cudf.to_datetime(gdf["unix_time"], unit="s")
     gdf["hour_of_day"] = ts.dt.hour.astype("int8")
@@ -68,6 +94,7 @@ def _engineer(df: pd.DataFrame, cudf) -> tuple:
     gdf["is_night"] = (gdf["hour_of_day"] <= 5).astype("int8")
     t["temporal"] = time.perf_counter() - t1
 
+    # --- Haversine distance ---
     t1 = time.perf_counter()
     R = 6371.0
     lat1 = np.radians(gdf["lat"])
@@ -80,22 +107,20 @@ def _engineer(df: pd.DataFrame, cudf) -> tuple:
     gdf["distance_km"] = 2 * R * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
     t["distance"] = time.perf_counter() - t1
 
-    t1 = time.perf_counter()
-    cat_map_series = cudf.Series(CATEGORY_MAP)
-    gdf["category_encoded"] = gdf["category"].map(cat_map_series).fillna(0).astype("int8")
-    state_map_series = cudf.Series(STATE_MAP)
-    gdf["state_encoded"] = gdf["state"].map(state_map_series).fillna(0).astype("int8")
-    gdf["gender_encoded"] = (gdf["gender"] == "F").astype("int8")
-    t["encoding"] = time.perf_counter() - t1
-
+    # --- Misc numeric ---
     t1 = time.perf_counter()
     gdf["city_pop_log"] = np.log1p(gdf["city_pop"])
     gdf["zip_region"] = (gdf["zip"] // 10000).astype("int8")
     t["misc"] = time.perf_counter() - t1
 
-    result = gdf[FEATURE_COLS].to_pandas()
+    # --- Assemble: GPU numeric cols + pandas-encoded categoricals ---
+    result = gdf[_GPU_FEATURE_COLS].to_pandas()
+    result["category_encoded"] = category_encoded.values
+    result["state_encoded"] = state_encoded.values
+    result["gender_encoded"] = gender_encoded.values
+
     t["total"] = time.perf_counter() - t0
-    return result, t
+    return result[FEATURE_COLS], t
 
 
 def run_gpu_loop(req_q, res_q) -> None:
