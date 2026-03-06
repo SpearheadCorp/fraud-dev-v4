@@ -50,7 +50,10 @@ def _probe_gpu() -> bool:
     try:
         r = subprocess.run(
             [sys.executable, "-c",
-             "import cudf, cupy as cp; cp.cuda.runtime.getDeviceCount(); print('ok')"],
+             "import cudf, cupy as cp, pandas as pd; "
+             "cp.cuda.runtime.getDeviceCount(); "
+             "cudf.from_pandas(pd.DataFrame({'a': [1.0]})); "
+             "print('ok')"],
             capture_output=True, timeout=30,
         )
         return r.returncode == 0 and b"ok" in r.stdout
