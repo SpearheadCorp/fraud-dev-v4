@@ -483,6 +483,9 @@ def main() -> None:
 
     OUTPUT_PATH_GPU.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH_CPU.mkdir(parents=True, exist_ok=True)
+    # Make queue dirs world-writable so non-root prep pods (e.g. RAPIDS uid=1001) can rename files
+    OUTPUT_PATH_GPU.chmod(0o777)
+    OUTPUT_PATH_CPU.chmod(0o777)
 
     # Load distributions
     if KAGGLE_SEED_PATH and Path(KAGGLE_SEED_PATH).exists():
