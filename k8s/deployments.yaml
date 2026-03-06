@@ -153,7 +153,6 @@ spec:
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
-              readOnly: true
             - name: features-data
               mountPath: /data/features
           resources:
@@ -198,7 +197,6 @@ spec:
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
-              readOnly: true
             - name: features-cpu-data
               mountPath: /data/features-cpu
       volumes:
