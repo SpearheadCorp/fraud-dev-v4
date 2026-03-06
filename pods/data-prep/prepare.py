@@ -57,11 +57,16 @@ GPU_AVAILABLE = False
 
 
 def _start_gpu_worker() -> bool:
-    """Start persistent GPU worker. Returns True when worker signals ready."""
+    """Start persistent GPU worker. Returns True when worker signals ready.
+
+    Uses fork context (not spawn): parent never imports cudf/CUDA so fork is
+    safe, and fork avoids reimporting __main__ which would cause recursive
+    _start_gpu_worker() calls inside the worker process.
+    """
     global _gpu_worker_proc, _gpu_req_q, _gpu_res_q
     try:
         import gpu_worker as _gw  # safe: cudf imported inside run_gpu_loop, not at module level
-        ctx = mp.get_context("spawn")
+        ctx = mp.get_context("fork")  # fork: no __main__ reimport, clean CUDA state (parent has none)
         _gpu_req_q = ctx.Queue()
         _gpu_res_q = ctx.Queue()
         _gpu_worker_proc = ctx.Process(
@@ -70,7 +75,7 @@ def _start_gpu_worker() -> bool:
             daemon=True,
         )
         _gpu_worker_proc.start()
-        msg = _gpu_res_q.get(timeout=60)  # wait for cudf init (can take ~30s cold)
+        msg = _gpu_res_q.get(timeout=90)  # wait for cudf + libcudf init (cold start ~30-60s)
         return msg == "ready"
     except Exception as exc:
         log.warning("[WARN] GPU worker startup failed: %s", exc)
@@ -314,14 +319,19 @@ def main() -> None:
 
         gpu_used = 0
         gpu_timing: dict = {}
-        try:
-            features_gpu, gpu_timing = engineer_features_gpu(df)
-            output = features_gpu
-            gpu_used = 1
-        except Exception as exc:
-            log.warning("[WARN] GPU failed (%s: %s) — using CPU", type(exc).__name__, exc)
+        if GPU_AVAILABLE:
+            try:
+                features_gpu, gpu_timing = engineer_features_gpu(df)
+                output = features_gpu
+                gpu_used = 1
+            except Exception as exc:
+                # GPU path failed — exit so K8s restarts this pod with fresh CUDA state.
+                # data-prep-cpu handles the CPU lane; this pod must stay GPU-only.
+                log.error("[ERROR] GPU path failed: %s: %s — exiting for K8s restart",
+                          type(exc).__name__, exc)
+                sys.exit(1)
+        else:
             output = features_cpu
-            gpu_timing = {k: 0.0 for k in cpu_timing}
 
         # --- Carry forward graph-critical columns for scorer ---
         for col in _PASSTHROUGH_COLS:
