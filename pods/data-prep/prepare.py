@@ -75,7 +75,7 @@ def _start_gpu_worker() -> bool:
             daemon=True,
         )
         _gpu_worker_proc.start()
-        msg = _gpu_res_q.get(timeout=120)  # wait for cudf + libcudf init + warmup (cold start ~30-90s)
+        msg = _gpu_res_q.get(timeout=600)  # wait for cudf + libcudf init + warmup (Numba JIT cold start can exceed 2 min)
         return msg == "ready"
     except Exception as exc:
         log.warning("[WARN] GPU worker startup failed: %s", exc)
@@ -231,7 +231,7 @@ def engineer_features_gpu(df: pd.DataFrame) -> tuple:
     _gpu_req_q.put(buf.getvalue())
 
     try:
-        status, data, timing = _gpu_res_q.get(timeout=120)
+        status, data, timing = _gpu_res_q.get(timeout=600)
     except _queue_module.Empty:
         GPU_AVAILABLE = _gpu_worker_proc.is_alive()
         raise RuntimeError("GPU worker timeout — worker may have crashed")

@@ -14,11 +14,20 @@ Protocol (via multiprocessing.Queue):
   None on req_q → graceful shutdown
 """
 import io
+import logging
+import sys
 import time
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [GPU-WORKER] %(message)s",
+    stream=sys.stderr,
+    force=True,
+)
 
 # ── Constants (duplicated from prepare.py for subprocess isolation) ─────────
 ALL_CATEGORIES = [
@@ -73,53 +82,66 @@ def _engineer(df: pd.DataFrame, cudf) -> tuple:
     state_encoded = df["state"].map(STATE_MAP).fillna(0).astype(np.int8)
     gender_encoded = (df["gender"] == "F").astype(np.int8)
     t["encoding"] = time.perf_counter() - t1
+    logging.info("step 1: pandas encoding done (%.2fs)", time.perf_counter() - t0)
 
     # --- Transfer numeric-only columns to GPU ---
     gdf = cudf.from_pandas(df[_NUMERIC_COLS])
+    logging.info("step 2: from_pandas done — %d rows on GPU (%.2fs)", len(gdf), time.perf_counter() - t0)
 
     # --- Amount features ---
     t1 = time.perf_counter()
     gdf["amt_log"] = np.log1p(gdf["amt"])
+    logging.info("step 3a: log1p done (%.2fs)", time.perf_counter() - t0)
     amt_mean = float(gdf["amt"].mean())
     amt_std = float(gdf["amt"].std())
     gdf["amt_scaled"] = (gdf["amt"] - amt_mean) / max(amt_std, 1e-9)
     t["amount"] = time.perf_counter() - t1
+    logging.info("step 3b: amount features done (%.2fs)", time.perf_counter() - t0)
 
     # --- Temporal features ---
     t1 = time.perf_counter()
     ts = cudf.to_datetime(gdf["unix_time"], unit="s")
+    logging.info("step 4a: to_datetime done (%.2fs)", time.perf_counter() - t0)
     gdf["hour_of_day"] = ts.dt.hour.astype("int8")
     gdf["day_of_week"] = ts.dt.dayofweek.astype("int8")
     gdf["is_weekend"] = (gdf["day_of_week"] >= 5).astype("int8")
     gdf["is_night"] = (gdf["hour_of_day"] <= 5).astype("int8")
     t["temporal"] = time.perf_counter() - t1
+    logging.info("step 4b: temporal features done (%.2fs)", time.perf_counter() - t0)
 
     # --- Haversine distance ---
     t1 = time.perf_counter()
     R = 6371.0
     lat1 = np.radians(gdf["lat"])
+    logging.info("step 5a: radians(lat) done (%.2fs)", time.perf_counter() - t0)
     lon1 = np.radians(gdf["long"])
     lat2 = np.radians(gdf["merch_lat"])
     lon2 = np.radians(gdf["merch_long"])
+    logging.info("step 5b: all radians done (%.2fs)", time.perf_counter() - t0)
     dlat = lat2 - lat1
     dlon = lon2 - lon1
     a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    logging.info("step 5c: sin/cos done (%.2fs)", time.perf_counter() - t0)
     gdf["distance_km"] = 2 * R * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
     t["distance"] = time.perf_counter() - t1
+    logging.info("step 5d: haversine done (%.2fs)", time.perf_counter() - t0)
 
     # --- Misc numeric ---
     t1 = time.perf_counter()
     gdf["city_pop_log"] = np.log1p(gdf["city_pop"])
     gdf["zip_region"] = (gdf["zip"] // 10000).astype("int8")
     t["misc"] = time.perf_counter() - t1
+    logging.info("step 6: misc done (%.2fs)", time.perf_counter() - t0)
 
     # --- Assemble: GPU numeric cols + pandas-encoded categoricals ---
     result = gdf[_GPU_FEATURE_COLS].to_pandas()
+    logging.info("step 7: to_pandas done (%.2fs)", time.perf_counter() - t0)
     result["category_encoded"] = category_encoded.values
     result["state_encoded"] = state_encoded.values
     result["gender_encoded"] = gender_encoded.values
 
     t["total"] = time.perf_counter() - t0
+    logging.info("step 8: engineer complete — total %.2fs", t["total"])
     return result[FEATURE_COLS], t
 
 
