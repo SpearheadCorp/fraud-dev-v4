@@ -87,6 +87,7 @@ def reset_pipeline(*paths: Path) -> dict:
             shutil.rmtree(str(p), ignore_errors=True)
             log.info("[INFO] Cleared %s", p)
         p.mkdir(parents=True, exist_ok=True)
+        p.chmod(0o777)  # NFS provisioner creates dirs world-writable; match it post-rmtree
         cleared.append(str(p))
     return {"status": "reset", "cleared": cleared}
 
