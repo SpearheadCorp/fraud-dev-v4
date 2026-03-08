@@ -56,7 +56,7 @@ TARGET_ROWS = int(os.environ.get("TARGET_ROWS", "1000000"))
 RUN_MODE = os.environ.get("RUN_MODE", "once")
 STRESS_MODE = os.environ.get("STRESS_MODE", "false").lower() == "true"
 KAGGLE_SEED_PATH = os.environ.get("KAGGLE_SEED_PATH", "")
-STRESS_CONFIG_PATH = Path(os.environ.get("STRESS_CONFIG_PATH", "/data/stress/stress.conf"))
+STRESS_CONFIG_PATH = Path(os.environ.get("STRESS_CONFIG_PATH", "/data/raw/.stress.conf"))
 # Rate governor: target rows/sec with asymmetric jitter for realistic variation.
 # 0 = unlimited (run as fast as possible). Overridden per-job via env.
 TARGET_ROWS_PER_SEC = int(os.environ.get("TARGET_ROWS_PER_SEC", "0"))
@@ -523,10 +523,9 @@ def main() -> None:
     log.info("[INFO] Starting data-gather: mode=%s workers=%d chunk_size=%d target_rows_per_sec=%d",
              RUN_MODE, num_workers, chunk_size, TARGET_ROWS_PER_SEC)
 
-    # Rate governor: seconds each chunk-slot should occupy.
-    # Asymmetric jitter: triangular(0.55, 0.92, 1.15) — biased low to mimic
-    # real-world bursty patterns (occasional slow periods, rare brief spikes).
-    target_chunk_time = (chunk_size / TARGET_ROWS_PER_SEC) if TARGET_ROWS_PER_SEC > 0 else 0.0
+    # Rate governor — mutable so hot-reload can change both rate and chunk_size.
+    target_rows_per_sec = TARGET_ROWS_PER_SEC
+    target_chunk_time = (chunk_size / target_rows_per_sec) if target_rows_per_sec > 0 else 0.0
 
     total_rows = 0
     total_bytes = 0.0
@@ -537,8 +536,11 @@ def main() -> None:
     rows_at_last_telemetry = 0
     actual_fraud_rate = dist.get("fraud_rate", FRAUD_RATE)
 
+    # Pool size = max stress workers so processes are warm and idle in normal
+    # mode, ready to absorb load the moment stress config is hot-reloaded.
+    _max_pool = min(NUM_WORKERS * 4, os.cpu_count() or 8)
     with multiprocessing.Pool(
-        processes=num_workers,
+        processes=_max_pool,
         initializer=_worker_init,
         initargs=(dist,),
     ) as pool:
@@ -615,10 +617,14 @@ def main() -> None:
                 if sc:
                     new_workers = int(sc.get("NUM_WORKERS", num_workers))
                     new_chunk = int(sc.get("CHUNK_SIZE", chunk_size))
-                    if new_workers != num_workers or new_chunk != chunk_size:
+                    new_rate = int(sc.get("TARGET_ROWS_PER_SEC", target_rows_per_sec))
+                    if new_workers != num_workers or new_chunk != chunk_size or new_rate != target_rows_per_sec:
                         num_workers = new_workers
                         chunk_size = new_chunk
-                        log.info("[INFO] Stress config reloaded: workers=%d chunk_size=%d", num_workers, chunk_size)
+                        target_rows_per_sec = new_rate
+                        target_chunk_time = (chunk_size / target_rows_per_sec) if target_rows_per_sec > 0 else 0.0
+                        log.info("[INFO] Stress config reloaded: workers=%d chunk_size=%d rate=%d/s",
+                                 num_workers, chunk_size, target_rows_per_sec)
 
                 batch_args = [
                     (chunk_id + i, chunk_size, seed_offset)

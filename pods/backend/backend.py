@@ -33,7 +33,22 @@ FEATURES_CPU_PATH = Path(os.environ.get("FEATURES_CPU_DATA_PATH", "/data/feature
 SCORES_GPU_PATH   = Path(os.environ.get("SCORES_GPU_PATH",     "/data/features/scores"))
 SCORES_CPU_PATH   = Path(os.environ.get("SCORES_CPU_PATH",     "/data/features-cpu/scores"))
 MODEL_REPO_PATH   = Path(os.environ.get("MODEL_REPO_PATH",     "/data/models"))
+STRESS_CONFIG_PATH = Path(os.environ.get("STRESS_CONFIG_PATH", "/data/raw/.stress.conf"))
 STATIC_DIR = Path(__file__).parent / "static"
+
+# Gather worker config written to STRESS_CONFIG_PATH for hot-reload by data-gather.
+GATHER_STRESS_WORKERS = int(os.environ.get("GATHER_STRESS_WORKERS", "8"))
+GATHER_STRESS_RATE    = int(os.environ.get("GATHER_STRESS_RATE",    "40000"))
+GATHER_NORMAL_WORKERS = int(os.environ.get("GATHER_NORMAL_WORKERS", "2"))
+GATHER_NORMAL_RATE    = int(os.environ.get("GATHER_NORMAL_RATE",    "10000"))
+
+
+def _write_gather_config(workers: int, rate: int) -> None:
+    """Write data-gather hot-reload config to shared NFS path."""
+    try:
+        STRESS_CONFIG_PATH.write_text(f"NUM_WORKERS={workers}\nTARGET_ROWS_PER_SEC={rate}\n")
+    except Exception as exc:
+        log.warning("[WARN] Failed to write gather config: %s", exc)
 
 # ---------------------------------------------------------------------------
 # Application state
@@ -76,7 +91,7 @@ async def start_pipeline():
         return {"status": "already_running", "message": "Pipeline is already running"}
     state.is_running = True
     state.start_time = time.time()
-    # pl.start_pipeline() is instant (just Deployment scale-up API calls)
+    _write_gather_config(GATHER_NORMAL_WORKERS, GATHER_NORMAL_RATE)  # ensure clean state on start
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, pl.start_pipeline)
     return {"status": "started", "message": "Deployments scaled up"}
@@ -111,6 +126,7 @@ async def reset_pipeline():
 async def start_stress():
     state.stress_mode = True
     state.last_telemetry.pop("gather", None)
+    _write_gather_config(GATHER_STRESS_WORKERS, GATHER_STRESS_RATE)
     loop = asyncio.get_event_loop()
     asyncio.create_task(loop.run_in_executor(None, lambda: pl.write_stress_config(True)))
     return {"status": "stress mode activated"}
@@ -120,6 +136,7 @@ async def start_stress():
 async def stop_stress():
     state.stress_mode = False
     state.last_telemetry.pop("gather", None)
+    _write_gather_config(GATHER_NORMAL_WORKERS, GATHER_NORMAL_RATE)
     loop = asyncio.get_event_loop()
     asyncio.create_task(loop.run_in_executor(None, lambda: pl.write_stress_config(False)))
     return {"status": "stress mode deactivated"}
