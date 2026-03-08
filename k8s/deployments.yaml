@@ -326,7 +326,7 @@ spec:
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
-            initialDelaySeconds: 180
+            initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
       volumes:
@@ -376,7 +376,7 @@ spec:
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
-            initialDelaySeconds: 180
+            initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
       volumes:
