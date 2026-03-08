@@ -1,8 +1,8 @@
 """
 Pipeline control: Deployment scaling for continuous pipeline stages.
-All pipeline stages (data-gather, data-prep-gpu, data-prep-cpu, scoring-gpu,
-scoring-cpu, triton) are long-lived Deployments. start/stop/stress scale
-replicas. model-build remains a Job but is run manually (offline, pre-demo).
+data-gather, data-prep-gpu, data-prep-cpu, scoring-gpu, scoring-cpu are
+scaled by start/stop/stress. triton is always-on (not scaled by pipeline
+control). model-build remains a Job but is run manually (offline, pre-demo).
 """
 import logging
 import os
@@ -22,7 +22,7 @@ NORMAL_REPLICAS = {
     "data-prep-cpu": 1,
     "scoring-gpu":   1,
     "scoring-cpu":   1,
-    "triton":        1,
+    # triton is always-on (replicas: 1 in deployments.yaml) — not touched by start/stop
 }
 
 STRESS_REPLICAS = {
@@ -31,7 +31,7 @@ STRESS_REPLICAS = {
     "data-prep-cpu": 2,   # scale CPU prep workers for stress throughput
     "scoring-gpu":   2,
     "scoring-cpu":   2,
-    "triton":        1,
+    # triton is always-on — not touched by stress
 }
 
 

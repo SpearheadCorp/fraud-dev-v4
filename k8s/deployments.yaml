@@ -217,7 +217,7 @@ metadata:
   name: triton
   namespace: fraud-det-v31
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: triton
@@ -297,7 +297,7 @@ spec:
             - name: MODEL_NAME
               value: fraud_gnn_gpu
             - name: WINDOW_CHUNKS
-              value: "10"
+              value: "2"
             - name: TRITON_RETRIES
               value: "30"
           volumeMounts:
@@ -341,7 +341,7 @@ spec:
             - name: MODEL_NAME
               value: fraud_gnn_cpu
             - name: WINDOW_CHUNKS
-              value: "10"
+              value: "2"
             - name: TRITON_RETRIES
               value: "30"
           volumeMounts:
