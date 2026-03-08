@@ -19,16 +19,16 @@ NAMESPACE = os.environ.get("K8S_NAMESPACE", "fraud-det-v31")
 NORMAL_REPLICAS = {
     "data-gather":   1,
     "data-prep-gpu": 1,   # 1 GPU for prep; triton holds the other L40S
-    "data-prep-cpu": 2,
-    "scoring-gpu":   2,
-    "scoring-cpu":   2,
+    "data-prep-cpu": 1,
+    "scoring-gpu":   1,
+    "scoring-cpu":   1,
     "triton":        1,
 }
 
 STRESS_REPLICAS = {
     "data-gather":   1,   # rate governed by TARGET_ROWS_PER_SEC env var
     "data-prep-gpu": 1,   # can't exceed 1 GPU prep pod (triton holds the other GPU)
-    "data-prep-cpu": 4,   # scale CPU prep workers for stress throughput
+    "data-prep-cpu": 2,   # scale CPU prep workers for stress throughput
     "scoring-gpu":   2,
     "scoring-cpu":   2,
     "triton":        1,

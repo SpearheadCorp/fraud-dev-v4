@@ -116,6 +116,9 @@ FEATURE_COLS = [
     "is_fraud",
 ]
 
+_REQUIRED_COLS = ["amt", "lat", "long", "merch_lat", "merch_long", "unix_time", "is_fraud"]
+_PASSTHROUGH_COLS = ["cc_num", "merchant", "trans_num", "category"]
+
 
 # ---------------------------------------------------------------------------
 # Haversine distance (pandas/numpy) — CPU reference path for speedup metric
@@ -132,13 +135,39 @@ def haversine_np(lat1, lon1, lat2, lon2):
 
 
 # ---------------------------------------------------------------------------
-# CPU feature engineering — reference path for speedup metric only
+# CPU feature engineering — full NFS lifecycle reference path for speedup metric
 # ---------------------------------------------------------------------------
 
-def engineer_features_cpu(df: pd.DataFrame) -> tuple:
-    """Run full feature engineering on CPU (pandas/numpy). Returns (df_features, timing_dict)."""
-    t = {}
+def engineer_features_cpu(raw_path: Path, cpu_tmp: Path) -> tuple:
+    """CPU reference: NFS read → transform → NFS write → delete.
+
+    Timing scope matches GPU worker (both cover read + compute + write) for a
+    fair apples-to-apples speedup comparison. Output is deleted immediately —
+    result unused, only timing matters. Storage I/O is intentional: FlashBlade
+    NFS throughput is the critical pipeline enabler this demo showcases.
+    """
+    t: dict = {}
     t0 = time.perf_counter()
+
+    # --- NFS read ---
+    df = pd.read_parquet(str(raw_path))
+
+    # --- Clean (same as GPU worker) ---
+    df["merch_zipcode"] = df["merch_zipcode"].fillna(0.0)
+    df["category"] = df["category"].fillna("misc_net")
+    df["state"] = df["state"].fillna("CA")
+    df["gender"] = df["gender"].fillna("F")
+    df = df.dropna(subset=_REQUIRED_COLS)
+    if len(df) == 0:
+        t["total"] = time.perf_counter() - t0
+        return {}, t
+
+    # --- Categorical encodings ---
+    t1 = time.perf_counter()
+    category_encoded = df["category"].map(CATEGORY_MAP).fillna(0).astype(np.int8)
+    state_encoded = df["state"].map(STATE_MAP).fillna(0).astype(np.int8)
+    gender_encoded = (df["gender"] == "F").astype(np.int8)
+    t["encoding"] = time.perf_counter() - t1
 
     # --- Amount features ---
     t1 = time.perf_counter()
@@ -165,21 +194,39 @@ def engineer_features_cpu(df: pd.DataFrame) -> tuple:
     )
     t["distance"] = time.perf_counter() - t1
 
-    # --- Categorical encodings ---
-    t1 = time.perf_counter()
-    category_encoded = df["category"].map(CATEGORY_MAP).fillna(0).astype(np.int8)
-    state_encoded = df["state"].map(STATE_MAP).fillna(0).astype(np.int8)
-    gender_encoded = (df["gender"] == "F").astype(np.int8)
-    t["encoding"] = time.perf_counter() - t1
-
-    # --- Population / zip ---
+    # --- Misc ---
     t1 = time.perf_counter()
     city_pop_log = np.log1p(df["city_pop"].values)
     zip_region = (df["zip"].values // 10000).astype(np.int8)
     t["misc"] = time.perf_counter() - t1
 
-    t["total"] = time.perf_counter() - t0
-    return {}, t  # result unused — only timing matters for speedup metric
+    # --- Build output (same schema as GPU worker) ---
+    out_df = pd.DataFrame({
+        "amt_log": amt_log, "amt_scaled": amt_scaled,
+        "hour_of_day": hour_of_day.values, "day_of_week": day_of_week.values,
+        "is_weekend": is_weekend.values, "is_night": is_night.values,
+        "distance_km": distance_km,
+        "category_encoded": category_encoded.values,
+        "state_encoded": state_encoded.values,
+        "gender_encoded": gender_encoded.values,
+        "city_pop_log": city_pop_log, "zip_region": zip_region,
+        "amt": df["amt"].values, "lat": df["lat"].values, "long": df["long"].values,
+        "city_pop": df["city_pop"].values, "unix_time": df["unix_time"].values,
+        "merch_lat": df["merch_lat"].values, "merch_long": df["merch_long"].values,
+        "merch_zipcode": df["merch_zipcode"].values.astype(np.int32),
+        "zip": df["zip"].values.astype(np.int32),
+        "is_fraud": df["is_fraud"].values,
+    })
+    for col in _PASSTHROUGH_COLS:
+        if col in df.columns:
+            out_df[col] = df[col].values
+
+    # --- NFS write + cleanup (tmp deleted — reference timing only) ---
+    out_df.to_parquet(str(cpu_tmp), index=False)
+    cpu_tmp.unlink(missing_ok=True)
+
+    t["total"] = time.perf_counter() - t0  # NFS read + compute + NFS write
+    return {}, t
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +247,6 @@ def emit_telemetry(stage: str, chunk_id: int, rows: int,
 # ---------------------------------------------------------------------------
 # Main — continuous file-queue loop
 # ---------------------------------------------------------------------------
-
-_REQUIRED_COLS = ["amt", "lat", "long", "merch_lat", "merch_long", "unix_time", "is_fraud"]
 
 # Pod-unique prefix so multiple replicas don't overwrite each other's output files.
 _POD_PREFIX = os.environ.get("HOSTNAME", str(os.getpid()))
@@ -232,29 +277,30 @@ def main() -> None:
             time.sleep(0.5)
             continue
 
-        # --- Load for CPU reference path (speedup metric) ---
+        # --- Validate chunk (quick read — separate from timed CPU reference path) ---
         try:
-            df = pd.read_parquet(str(claimed))
+            df_check = pd.read_parquet(str(claimed))
         except Exception as exc:
             log.warning("[WARN] Failed to read %s: %s — skipping", claimed.name, exc)
             claimed.rename(str(claimed).replace(".processing", ".done"))
             continue
 
-        if len(df) == 0:
+        if len(df_check) == 0:
             claimed.rename(str(claimed).replace(".processing", ".done"))
             continue
+        del df_check
 
         # --- Prepare output paths ---
         out_file = OUTPUT_PATH / f"features_{_POD_PREFIX}_{chunk_id:06d}.parquet"
         tmp_file = out_file.with_suffix(".parquet.tmp")
+        cpu_tmp  = OUTPUT_PATH / f"cpu_ref_{_POD_PREFIX}_{chunk_id:06d}.parquet.tmp"
 
-        # --- Send paths to GPU worker (non-blocking) — GPU and CPU run in parallel ---
+        # --- CPU reference path: full NFS lifecycle (read + transform + write) ---
+        # Runs before GPU so claimed (.processing) is still present for both reads.
+        _, cpu_timing = engineer_features_cpu(claimed, cpu_tmp)
+
+        # --- GPU worker path: send paths, collect result ---
         _gpu_req_q.put((str(claimed), str(out_file), str(tmp_file)))
-
-        # --- CPU reference path runs while GPU worker processes the file ---
-        _, cpu_timing = engineer_features_cpu(df)
-
-        # --- Collect GPU worker result (may already be ready) ---
         try:
             status, n_rows, gpu_timing = _gpu_res_q.get(timeout=600)
         except _queue_module.Empty:
@@ -265,8 +311,7 @@ def main() -> None:
             log.error("[ERROR] GPU worker error: %s — exiting for K8s restart", n_rows)
             sys.exit(1)
 
-        # Worker handled: atomic write (tmp→rename), claimed.rename(.done)
-        # Nothing left to do for file I/O.
+        # GPU worker handled: atomic write (tmp→rename), claimed.rename(.done).
 
         speedup = cpu_timing["total"] / max(gpu_timing.get("total", 0.0), 1e-6)
         emit_telemetry(

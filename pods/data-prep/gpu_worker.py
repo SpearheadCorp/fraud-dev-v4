@@ -175,14 +175,14 @@ def _process_file(proc_path: str, out_path: str, tmp_path: str, cudf) -> tuple:
     extra_cols = [c for c in arrow_out.schema.names if c not in FEATURE_COLS]
     arrow_out = arrow_out.select(base_cols + extra_cols)
 
-    t["total"] = time.perf_counter() - t0
-    logging.info("step 8: arrow table built — %d rows, %d cols, total %.2fs",
-                 n_rows, arrow_out.num_columns, t["total"])
+    logging.info("step 8: arrow table built — %d rows, %d cols (%.2fs)",
+                 n_rows, arrow_out.num_columns, time.perf_counter() - t0)
 
     # --- Atomic write: tmp → rename (scorer never sees partial file) ---
     pq.write_table(arrow_out, str(tmp_path))
     Path(tmp_path).rename(out_path)
-    logging.info("step 9: written to %s (%.2fs)", out_path, time.perf_counter() - t0)
+    t["total"] = time.perf_counter() - t0  # includes NFS read + compute + NFS write
+    logging.info("step 9: written to %s (%.2fs)", out_path, t["total"])
 
     # --- Mark input done ---
     Path(proc_path).rename(proc_path.replace(".processing", ".done"))
