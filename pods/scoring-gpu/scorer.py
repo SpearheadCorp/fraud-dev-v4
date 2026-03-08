@@ -10,6 +10,7 @@ import sys
 import time
 import signal
 import logging
+import threading
 from collections import deque
 from pathlib import Path
 
@@ -37,6 +38,18 @@ def _handle_signal(signum, frame):
 
 signal.signal(signal.SIGTERM, _handle_signal)
 signal.signal(signal.SIGINT, _handle_signal)
+
+# Liveness heartbeat — started immediately so the probe never kills the pod
+# during Triton connection wait (can block up to TRITON_RETRIES × 5s).
+def _liveness_heartbeat():
+    while True:
+        try:
+            Path("/tmp/.healthy").touch()
+        except OSError:
+            pass
+        time.sleep(10)
+
+threading.Thread(target=_liveness_heartbeat, daemon=True, name="liveness").start()
 
 # ---------------------------------------------------------------------------
 # Configuration
