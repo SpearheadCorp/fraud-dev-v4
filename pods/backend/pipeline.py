@@ -1,8 +1,7 @@
 """
 Pipeline control: Deployment scaling for continuous pipeline stages.
-data-gather, data-prep-gpu, data-prep-cpu, scoring-gpu, scoring-cpu are
-scaled by start/stop/stress. triton is always-on (not scaled by pipeline
-control). model-build remains a Job but is run manually (offline, pre-demo).
+All pipeline stages are scaled by start/stop/stress. model-build remains
+a Job but is run manually (offline, pre-demo).
 """
 import logging
 import os
@@ -18,24 +17,20 @@ NAMESPACE = os.environ.get("K8S_NAMESPACE", "fraud-det-v31")
 
 NORMAL_REPLICAS = {
     "data-gather":   1,
-    "data-prep-gpu": 1,   # 1 GPU for prep; triton holds the other L40S
+    "data-prep-gpu": 1,
     "data-prep-cpu": 1,
     "scoring-gpu":   1,
     "scoring-cpu":   1,
-    # triton is always-on (replicas: 1 in deployments.yaml) — not touched by start/stop
+    "triton":        1,
 }
 
-# Deployments that are always-on (not scaled by pipeline start/stop/stress).
-# get_service_states() reports these separately so dashboard still shows their status.
-ALWAYS_ON = ("triton",)
-
 STRESS_REPLICAS = {
-    "data-gather":   1,   # rate governed by TARGET_ROWS_PER_SEC env var
-    "data-prep-gpu": 1,   # can't exceed 1 GPU prep pod (triton holds the other GPU)
-    "data-prep-cpu": 2,   # scale CPU prep workers for stress throughput
+    "data-gather":   1,
+    "data-prep-gpu": 1,   # can't exceed 1 GPU (other L40S held by triton)
+    "data-prep-cpu": 2,
     "scoring-gpu":   2,
     "scoring-cpu":   2,
-    # triton is always-on — not touched by stress
+    "triton":        1,
 }
 
 
@@ -100,7 +95,7 @@ def get_service_states() -> dict:
     """Return status of all pipeline Deployments (scaled + always-on)."""
     _, apps_v1, _ = _k8s()
     states: dict = {}
-    for dep in list(NORMAL_REPLICAS) + list(ALWAYS_ON):
+    for dep in NORMAL_REPLICAS:
         try:
             d = apps_v1.read_namespaced_deployment(name=dep, namespace=NAMESPACE)
             ready   = d.status.ready_replicas or 0

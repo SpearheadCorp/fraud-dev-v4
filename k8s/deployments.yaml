@@ -239,7 +239,7 @@ metadata:
   name: triton
   namespace: fraud-det-v31
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: triton
