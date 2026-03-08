@@ -137,6 +137,8 @@ metadata:
   namespace: fraud-det-v31
 spec:
   replicas: 0
+  strategy:
+    type: Recreate   # GPU resource (1×L40S) can't be held by two pods simultaneously
   selector:
     matchLabels:
       app: data-prep-gpu
@@ -169,7 +171,7 @@ spec:
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
-            initialDelaySeconds: 180
+            initialDelaySeconds: 240
             periodSeconds: 15
             failureThreshold: 2
       volumes:
@@ -324,7 +326,7 @@ spec:
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
-            initialDelaySeconds: 60
+            initialDelaySeconds: 180
             periodSeconds: 15
             failureThreshold: 2
       volumes:
@@ -374,7 +376,7 @@ spec:
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
-            initialDelaySeconds: 60
+            initialDelaySeconds: 180
             periodSeconds: 15
             failureThreshold: 2
       volumes:
