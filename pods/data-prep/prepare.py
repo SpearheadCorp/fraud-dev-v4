@@ -12,6 +12,7 @@ import sys
 import time
 import logging
 import signal
+import threading
 import multiprocessing as mp
 import queue as _queue_module
 from pathlib import Path
@@ -81,6 +82,19 @@ def _start_gpu_worker() -> bool:
         log.warning("[WARN] GPU worker startup failed: %s", exc)
         return False
 
+
+# Liveness heartbeat thread — started before GPU worker so the probe never
+# kills the pod during Numba JIT cold-start (can exceed 4 min on first run).
+# Main loop also touches /.healthy every iteration for tight steady-state detection.
+def _liveness_heartbeat():
+    while True:
+        try:
+            Path("/.healthy").touch()
+        except OSError:
+            pass
+        time.sleep(10)
+
+threading.Thread(target=_liveness_heartbeat, daemon=True, name="liveness").start()
 
 if _start_gpu_worker():
     GPU_AVAILABLE = True

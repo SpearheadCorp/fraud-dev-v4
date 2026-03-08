@@ -160,6 +160,8 @@ spec:
               value: /data/features/gpu
             - name: CUDF_SPILL
               value: "1"
+            - name: NUMBA_CACHE_DIR
+              value: /data/features/.numba-cache   # persists across pod restarts → skips JIT recompilation
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
@@ -171,7 +173,7 @@ spec:
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
-            initialDelaySeconds: 240
+            initialDelaySeconds: 60   # heartbeat thread touches /.healthy within 1s of start
             periodSeconds: 15
             failureThreshold: 2
       volumes:
