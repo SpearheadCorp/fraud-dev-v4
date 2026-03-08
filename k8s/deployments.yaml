@@ -109,7 +109,7 @@ spec:
             - name: NUM_WORKERS
               value: "2"
             - name: CHUNK_SIZE
-              value: "10000"
+              value: "50000"
             - name: TARGET_ROWS_PER_SEC
               value: "10000"
             - name: KAGGLE_SEED_PATH
