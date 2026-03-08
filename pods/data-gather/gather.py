@@ -609,7 +609,7 @@ def main() -> None:
             seed_offset = int(time.time()) & 0xFFFFFF
 
             while not _SHUTDOWN:
-                Path("/.healthy").touch()  # liveness heartbeat
+                Path("/tmp/.healthy").touch()  # liveness heartbeat
                 # Hot-reload stress config
                 sc = load_stress_config()
                 if sc:

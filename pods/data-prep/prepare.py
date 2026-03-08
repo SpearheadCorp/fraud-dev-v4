@@ -85,11 +85,11 @@ def _start_gpu_worker() -> bool:
 
 # Liveness heartbeat thread — started before GPU worker so the probe never
 # kills the pod during Numba JIT cold-start (can exceed 4 min on first run).
-# Main loop also touches /.healthy every iteration for tight steady-state detection.
+# Main loop also touches /tmp/.healthy every iteration for tight steady-state detection.
 def _liveness_heartbeat():
     while True:
         try:
-            Path("/.healthy").touch()
+            Path("/tmp/.healthy").touch()
         except OSError:
             pass
         time.sleep(10)
@@ -274,7 +274,7 @@ def main() -> None:
 
     chunk_id = 0
     while not _SHUTDOWN:
-        Path("/.healthy").touch()  # liveness heartbeat
+        Path("/tmp/.healthy").touch()  # liveness heartbeat
         # --- Claim next available chunk via atomic rename ---
         files = sorted(f for f in INPUT_PATH.glob("*.parquet")
                        if not f.name.endswith((".processing", ".done")))

@@ -119,7 +119,7 @@ spec:
               mountPath: /data/raw
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
@@ -172,8 +172,8 @@ spec:
               nvidia.com/gpu: "1"
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
-            initialDelaySeconds: 60   # heartbeat thread touches /.healthy within 1s of start
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
+            initialDelaySeconds: 60   # heartbeat thread touches /tmp/.healthy within 1s of start
             periodSeconds: 15
             failureThreshold: 2
       volumes:
@@ -219,7 +219,7 @@ spec:
               mountPath: /data/features-cpu
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
@@ -327,7 +327,7 @@ spec:
               mountPath: /data/features
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
@@ -377,7 +377,7 @@ spec:
               mountPath: /data/features-cpu
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/.healthy')<30"]
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
