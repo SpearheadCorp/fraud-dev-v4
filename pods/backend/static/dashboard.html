@@ -54,18 +54,33 @@
   .btn-stress:hover { filter: brightness(1.1); }
   button:disabled { opacity: 0.35; cursor: not-allowed; filter: none !important; }
 
-  /* Pod startup status bar */
-  #pod-status {
-    display: none; padding: 8px 20px; gap: 16px; align-items: center; flex-wrap: wrap;
-    background: rgba(88,166,255,0.05); border-bottom: 1px solid rgba(88,166,255,0.15);
+  /* Pod startup modal */
+  #pod-modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+    z-index: 1000; align-items: center; justify-content: center;
   }
-  .pod-chip { font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
-  .pod-chip .icon { font-weight: 700; }
+  #pod-modal-backdrop.visible { display: flex; }
+  #pod-modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 28px 32px; min-width: 400px; max-width: 520px; width: 90%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  #pod-modal h2 { margin: 0 0 6px; font-size: 18px; color: var(--text); }
+  #pod-modal .pod-modal-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 22px; }
+  #pod-modal-chips { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+  .pod-modal-row { display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 6px 10px; border-radius: 5px; background: rgba(255,255,255,0.03); }
+  .pod-modal-row .icon { font-size: 15px; font-weight: 700; width: 20px; text-align: center; }
   .pod-ready   { color: var(--green); }
   .pod-scaling { color: var(--orange); }
   .pod-stopped { color: var(--text-muted); }
   @keyframes spin { to { transform: rotate(360deg); } }
   .pod-scaling .icon { display: inline-block; animation: spin 1s linear infinite; }
+  #pod-modal-dismiss {
+    display: none; width: 100%; background: var(--green); color: #000; border: none;
+    padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: opacity .15s;
+  }
+  #pod-modal-dismiss:hover { opacity: 0.85; }
 
   /* Stress banner */
   #stress-banner {
@@ -170,9 +185,13 @@
   </div>
 </header>
 
-<div id="pod-status">
-  <span id="pod-status-title" style="font-size:12px;font-weight:600;color:var(--accent)">Starting pipeline…</span>
-  <div id="pod-status-pods" style="display:flex;gap:12px;flex-wrap:wrap"></div>
+<div id="pod-modal-backdrop">
+  <div id="pod-modal">
+    <h2 id="pod-modal-title">🚀 Starting Pipeline…</h2>
+    <p class="pod-modal-sub" id="pod-modal-sub">Pods are scaling up — takes 20–60 s on first start</p>
+    <div id="pod-modal-chips"></div>
+    <button id="pod-modal-dismiss" onclick="hidePodModal()">✓ All Ready — Dismiss</button>
+  </div>
 </div>
 
 <div class="tabs">
@@ -618,7 +637,7 @@ function updateDashboard(data) {
   startBtn.disabled = isRunning;
   document.getElementById('stop-btn').disabled    = !isRunning;
   document.getElementById('stress-btn').disabled  = !isRunning;
-  if (isRunning) startPodPolling(); else { stopPodPolling(); document.getElementById('pod-status').style.display = 'none'; }
+  if (!isRunning) stopPodPolling();
 
   // Elapsed
   const e = data.elapsed_sec || 0;
@@ -994,7 +1013,7 @@ async function startPipeline() {
   btn.disabled = true; btn.textContent = '…Starting';
   try {
     await fetch('/api/control/start', { method: 'POST' });
-    // updateDashboard() will set "▶ Running" on next WS tick (~1s)
+    showPodModal();  // open startup progress modal
   } catch (e) {
     btn.textContent = '▶ Start'; btn.className = 'btn-primary'; btn.disabled = false;
   }
@@ -1086,9 +1105,24 @@ const SERVICE_LABELS = {
 
 let podPollInterval = null;
 
+function showPodModal() {
+  document.getElementById('pod-modal-backdrop').classList.add('visible');
+  document.getElementById('pod-modal-title').textContent = '🚀 Starting Pipeline…';
+  document.getElementById('pod-modal-title').style.color = 'var(--text)';
+  document.getElementById('pod-modal-sub').textContent = 'Pods are scaling up — takes 20–60 s on first start';
+  document.getElementById('pod-modal-dismiss').style.display = 'none';
+  document.getElementById('pod-modal-chips').innerHTML = '';
+  startPodPolling();
+}
+
+function hidePodModal() {
+  document.getElementById('pod-modal-backdrop').classList.remove('visible');
+  stopPodPolling();
+}
+
 function startPodPolling() {
   if (podPollInterval) return;
-  pollPodStatus();                                    // immediate
+  pollPodStatus();
   podPollInterval = setInterval(pollPodStatus, 2000);
 }
 
@@ -1104,31 +1138,26 @@ async function pollPodStatus() {
 }
 
 function renderPodStatus(services, isRunning) {
-  const panel = document.getElementById('pod-status');
-  const title = document.getElementById('pod-status-title');
-  const pods  = document.getElementById('pod-status-pods');
+  const backdrop = document.getElementById('pod-modal-backdrop');
+  if (!backdrop.classList.contains('visible')) return;  // modal not open, nothing to update
 
-  if (!isRunning) {
-    panel.style.display = 'none';
-    stopPodPolling();
-    return;
-  }
+  if (!isRunning) { hidePodModal(); return; }
 
   const allReady = Object.keys(SERVICE_LABELS).every(k => services[k] === 'Ready');
-  panel.style.display = 'flex';
-  title.textContent = allReady ? 'All pods ready ✓' : 'Starting pipeline — pods coming up…';
-  title.style.color = allReady ? 'var(--green)' : 'var(--accent)';
 
-  pods.innerHTML = Object.entries(SERVICE_LABELS).map(([key, label]) => {
+  document.getElementById('pod-modal-chips').innerHTML = Object.entries(SERVICE_LABELS).map(([key, label]) => {
     const state = services[key] || 'Stopped';
     const cls   = state === 'Ready' ? 'pod-ready' : state === 'Scaling' ? 'pod-scaling' : 'pod-stopped';
     const icon  = state === 'Ready' ? '✓' : state === 'Scaling' ? '⟳' : '○';
-    return `<span class="pod-chip ${cls}"><span class="icon">${icon}</span>${label}</span>`;
+    return `<div class="pod-modal-row ${cls}"><span class="icon">${icon}</span>${label}</div>`;
   }).join('');
 
   if (allReady) {
     stopPodPolling();
-    setTimeout(() => { panel.style.display = 'none'; }, 4000);
+    document.getElementById('pod-modal-title').textContent = '✓ All Pods Ready';
+    document.getElementById('pod-modal-title').style.color = 'var(--green)';
+    document.getElementById('pod-modal-sub').textContent = 'Pipeline is running. Dismiss to view the dashboard.';
+    document.getElementById('pod-modal-dismiss').style.display = 'block';
   }
 }
 
