@@ -54,6 +54,19 @@
   .btn-stress:hover { filter: brightness(1.1); }
   button:disabled { opacity: 0.35; cursor: not-allowed; filter: none !important; }
 
+  /* Pod startup status bar */
+  #pod-status {
+    display: none; padding: 8px 20px; gap: 16px; align-items: center; flex-wrap: wrap;
+    background: rgba(88,166,255,0.05); border-bottom: 1px solid rgba(88,166,255,0.15);
+  }
+  .pod-chip { font-size: 12px; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+  .pod-chip .icon { font-weight: 700; }
+  .pod-ready   { color: var(--green); }
+  .pod-scaling { color: var(--orange); }
+  .pod-stopped { color: var(--text-muted); }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .pod-scaling .icon { display: inline-block; animation: spin 1s linear infinite; }
+
   /* Stress banner */
   #stress-banner {
     display: none; background: rgba(227,179,65,0.15); border-bottom: 2px solid var(--orange);
@@ -156,6 +169,11 @@
     <button class="btn-secondary" onclick="resetPipeline()">↺ Reset</button>
   </div>
 </header>
+
+<div id="pod-status">
+  <span id="pod-status-title" style="font-size:12px;font-weight:600;color:var(--accent)">Starting pipeline…</span>
+  <div id="pod-status-pods" style="display:flex;gap:12px;flex-wrap:wrap"></div>
+</div>
 
 <div class="tabs">
   <button class="tab-btn active" onclick="showTab('business', this)">Business</button>
@@ -600,6 +618,7 @@ function updateDashboard(data) {
   startBtn.disabled = isRunning;
   document.getElementById('stop-btn').disabled    = !isRunning;
   document.getElementById('stress-btn').disabled  = !isRunning;
+  if (isRunning) startPodPolling(); else { stopPodPolling(); document.getElementById('pod-status').style.display = 'none'; }
 
   // Elapsed
   const e = data.elapsed_sec || 0;
@@ -1050,6 +1069,66 @@ async function toggleStress() {
     await fetch('/api/control/stress-stop', { method: 'POST' });
   } else {
     await fetch('/api/control/stress', { method: 'POST' });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pod startup status bar
+// ---------------------------------------------------------------------------
+const SERVICE_LABELS = {
+  'data-gather':   'Generate',
+  'data-prep-gpu': 'Prep GPU',
+  'data-prep-cpu': 'Prep CPU',
+  'triton':        'Triton',
+  'scoring-gpu':   'Score GPU',
+  'scoring-cpu':   'Score CPU',
+};
+
+let podPollInterval = null;
+
+function startPodPolling() {
+  if (podPollInterval) return;
+  pollPodStatus();                                    // immediate
+  podPollInterval = setInterval(pollPodStatus, 2000);
+}
+
+function stopPodPolling() {
+  if (podPollInterval) { clearInterval(podPollInterval); podPollInterval = null; }
+}
+
+async function pollPodStatus() {
+  try {
+    const data = await fetch('/api/status').then(r => r.json());
+    renderPodStatus(data.services || {}, data.is_running);
+  } catch (e) {}
+}
+
+function renderPodStatus(services, isRunning) {
+  const panel = document.getElementById('pod-status');
+  const title = document.getElementById('pod-status-title');
+  const pods  = document.getElementById('pod-status-pods');
+
+  if (!isRunning) {
+    panel.style.display = 'none';
+    stopPodPolling();
+    return;
+  }
+
+  const allReady = Object.keys(SERVICE_LABELS).every(k => services[k] === 'Ready');
+  panel.style.display = 'flex';
+  title.textContent = allReady ? 'All pods ready ✓' : 'Starting pipeline — pods coming up…';
+  title.style.color = allReady ? 'var(--green)' : 'var(--accent)';
+
+  pods.innerHTML = Object.entries(SERVICE_LABELS).map(([key, label]) => {
+    const state = services[key] || 'Stopped';
+    const cls   = state === 'Ready' ? 'pod-ready' : state === 'Scaling' ? 'pod-scaling' : 'pod-stopped';
+    const icon  = state === 'Ready' ? '✓' : state === 'Scaling' ? '⟳' : '○';
+    return `<span class="pod-chip ${cls}"><span class="icon">${icon}</span>${label}</span>`;
+  }).join('');
+
+  if (allReady) {
+    stopPodPolling();
+    setTimeout(() => { panel.style.display = 'none'; }, 4000);
   }
 }
 
