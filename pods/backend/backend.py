@@ -207,14 +207,16 @@ async def dashboard_ws(websocket: WebSocket):
         while True:
             try:
                 payload = collector.collect()
-                await websocket.send_json(payload)
             except Exception as exc:
                 log.warning("[WARN] metrics collect error: %s", exc)
+                await asyncio.sleep(1.0)
+                continue
+            await websocket.send_json(payload)
             await asyncio.sleep(1.0)
     except WebSocketDisconnect:
         log.info("[INFO] WebSocket client disconnected")
-    except Exception as exc:
-        log.warning("[WARN] WebSocket error: %s", exc)
+    except Exception:
+        log.info("[INFO] WebSocket connection closed")
 
 
 # ---------------------------------------------------------------------------
@@ -229,4 +231,13 @@ async def startup_event():
     for p in (RAW_PATH_GPU, RAW_PATH_CPU, FEATURES_GPU_PATH, FEATURES_CPU_PATH,
               SCORES_GPU_PATH, SCORES_CPU_PATH):
         p.mkdir(parents=True, exist_ok=True)
+    # Infer is_running from actual K8s deployment states (survives pod restarts)
+    try:
+        service_states = pl.get_service_states()
+        if any(s not in ("Stopped", "NotFound") for s in service_states.values()):
+            state.is_running = True
+            state.start_time = state.start_time or time.time()
+            log.info("[INFO] Inferred is_running=True from K8s deployment states")
+    except Exception as exc:
+        log.warning("[WARN] Could not infer pipeline state from K8s: %s", exc)
     log.info("[INFO] Backend started — dashboard at http://0.0.0.0:8080")
