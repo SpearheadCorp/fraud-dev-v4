@@ -28,6 +28,7 @@ SCORES_CPU_PATH   = Path(os.environ.get("SCORES_CPU_PATH",    "/data/features-cp
 NAMESPACE         = os.environ.get("K8S_NAMESPACE",           "fraud-det-v31")
 FLASHBLADE_FS_NAME = os.environ.get("FLASHBLADE_FS_NAME",    "financial-fraud-detection-demo")
 GPU_NODE_HOSTNAME  = os.environ.get("GPU_NODE_HOSTNAME",      "slc6-lg-n3-b30-29")
+NFS_NODE_INSTANCE  = os.environ.get("NFS_NODE_INSTANCE",      "10.23.181.44:9100")
 
 
 def _core_v1() -> client.CoreV1Api:
@@ -313,26 +314,27 @@ class MetricsCollector:
         return {"gpu_0_util_pct": 0.0, "gpu_0_mem_pct": 0.0}
 
     # ------------------------------------------------------------------
-    # FlashBlade latency via Prometheus purefb exporter
+    # FlashBlade NFS ops/s via node-exporter (node .44 = slc6-lg-n3-b30-29)
+    # purefb exporter not deployed; node_nfs_requests_total is the available proxy.
     # ------------------------------------------------------------------
 
     def _collect_flashblade(self) -> dict:
         try:
             out: dict = {}
-            for dim, key in [("read", "read_latency_ms"), ("write", "write_latency_ms")]:
-                query = (f'purefb_file_systems_performance_latency_usec'
-                         f'{{name="{FLASHBLADE_FS_NAME}",dimension="{dim}"}}')
+            for method, key in [("Read", "nfs_read_ops"), ("Write", "nfs_write_ops")]:
+                query = (f'sum(rate(node_nfs_requests_total'
+                         f'{{instance="{NFS_NODE_INSTANCE}",method="{method}"}}[30s]))')
                 resp = requests.get(
                     f"{PROMETHEUS_URL}/api/v1/query",
                     params={"query": query}, timeout=3,
                 )
                 resp.raise_for_status()
                 result = resp.json().get("data", {}).get("result", [])
-                out[key] = round(float(result[0]["value"][1]) / 1000, 2) if result else 0.0
+                out[key] = round(float(result[0]["value"][1]), 1) if result else 0.0
             return out
         except Exception as exc:
             log.debug("[DEBUG] _collect_flashblade: %s", exc)
-            return {"read_latency_ms": 0.0, "write_latency_ms": 0.0}
+            return {"nfs_read_ops": 0.0, "nfs_write_ops": 0.0}
 
     # ------------------------------------------------------------------
     # Business KPIs
