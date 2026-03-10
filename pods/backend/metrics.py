@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-import psutil
 import requests
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -273,13 +272,40 @@ class MetricsCollector:
 
     def _collect_system(self) -> dict:
         try:
-            cpu = psutil.cpu_percent(interval=None)
-            vm  = psutil.virtual_memory()
+            # Node-level CPU % for worker .44 (where all pipeline pods run)
+            query = ('100 - (avg(rate(node_cpu_seconds_total'
+                     f'{{instance="{NFS_NODE_INSTANCE}",mode="idle"}}[1m]))*100)')
+            resp = requests.get(
+                f"{PROMETHEUS_URL}/api/v1/query",
+                params={"query": query}, timeout=3,
+            )
+            resp.raise_for_status()
+            result = resp.json().get("data", {}).get("result", [])
+            cpu = round(float(result[0]["value"][1]), 1) if result else 0.0
+
+            # RAM from node-exporter on .44
+            mem_total_resp = requests.get(
+                f"{PROMETHEUS_URL}/api/v1/query",
+                params={"query": f'node_memory_MemTotal_bytes{{instance="{NFS_NODE_INSTANCE}"}}'},
+                timeout=3,
+            )
+            mem_avail_resp = requests.get(
+                f"{PROMETHEUS_URL}/api/v1/query",
+                params={"query": f'node_memory_MemAvailable_bytes{{instance="{NFS_NODE_INSTANCE}"}}'},
+                timeout=3,
+            )
+            mem_total_res = mem_total_resp.json().get("data", {}).get("result", [])
+            mem_avail_res = mem_avail_resp.json().get("data", {}).get("result", [])
+            mem_total = float(mem_total_res[0]["value"][1]) if mem_total_res else 0.0
+            mem_avail = float(mem_avail_res[0]["value"][1]) if mem_avail_res else 0.0
+            mem_used  = mem_total - mem_avail
+            ram_pct   = round(mem_used / mem_total * 100, 1) if mem_total else 0.0
+
             return {
                 "cpu_percent":  cpu,
-                "ram_percent":  vm.percent,
-                "ram_used_gb":  round(vm.used / 1e9, 2),
-                "ram_total_gb": round(vm.total / 1e9, 2),
+                "ram_percent":  ram_pct,
+                "ram_used_gb":  round(mem_used / 1e9, 2),
+                "ram_total_gb": round(mem_total / 1e9, 2),
             }
         except Exception as exc:
             log.debug("[DEBUG] _collect_system: %s", exc)
