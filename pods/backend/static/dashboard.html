@@ -1306,54 +1306,46 @@ async function resetPipeline() {
 
 async function toggleStress() {
   if (stressActive) {
-    // Stop stress — resume model-train, scale back to normal replicas
-    _ctlShow('🔄 Returning to Normal Mode…', 'Resuming model-train, scaling down to standard replica counts');
+    // Stop stress — scale back to normal replicas
+    _ctlShow('🔄 Returning to Normal Mode…', 'Scaling down to standard replica counts');
     const steps = [
       {
         label:  'Restoring normal config',
         action: () => fetch('/api/control/stress-stop', { method: 'POST' }),
       },
-      { label: 'Model Train → resumed', check: async () => {
+      { label: 'Data Gather → x4', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
-          return (d.services || {})['model-train'] === 'Ready';
-        }},
-      { label: 'Data Gather → x1', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['data-gather'] || {}).desired === 1;
+          return ((d.replicas || {})['data-gather'] || {}).desired === 4;
         }},
       { label: 'Data Prep → x1', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
           return ((d.replicas || {})['data-prep'] || {}).desired === 1;
         }},
-      { label: 'Scoring → x1', check: async () => {
+      { label: 'Model Train → running', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['scoring'] || {}).desired === 1;
+          return (d.services || {})['model-train'] === 'Ready';
         }},
     ];
     await _ctlRunSteps(steps, '🔄 Normal Mode', 'Pipeline running at standard throughput.', null, null);
   } else {
-    // Start stress — pause model-train, scale up gather/prep/scoring
-    _ctlShow('⚡ Activating Stress Mode…', 'Pausing model-train, scaling data-gather to 4, data-prep to 2, scoring to 2');
+    // Start stress — flood with data, single GPU works harder on larger batches
+    _ctlShow('⚡ Activating Stress Mode…', 'Scaling data-gather to 8 for maximum NFS throughput');
     const steps = [
       {
         label:  'Activating high-throughput config',
         action: () => fetch('/api/control/stress', { method: 'POST' }),
       },
-      { label: 'Model Train → paused', check: async () => {
+      { label: 'Data Gather → x8', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
-          return ['Stopped','NotFound'].includes((d.services || {})['model-train']);
-        }},
-      { label: 'Data Gather → x4', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['data-gather'] || {}).desired === 4;
-        }},
-      { label: 'Data Prep → x2', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['data-prep'] || {}).desired === 2;
+          return ((d.replicas || {})['data-gather'] || {}).desired === 8;
         }},
       { label: 'Scoring → x2', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
           return ((d.replicas || {})['scoring'] || {}).desired === 2;
+        }},
+      { label: 'Model Train → running', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return (d.services || {})['model-train'] === 'Ready';
         }},
     ];
     await _ctlRunSteps(steps, '⚡ Stress Mode Active', 'Pipeline running at maximum throughput.', null, null);
