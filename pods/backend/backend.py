@@ -242,6 +242,12 @@ async def dashboard_ws(websocket: WebSocket):
         log.info("[INFO] WebSocket connection closed")
 
 
+# Alias — some corporate proxies rewrite /ws/ paths
+@app.websocket("/data/dashboard")
+async def dashboard_ws_alias(websocket: WebSocket):
+    await dashboard_ws(websocket)
+
+
 # ---------------------------------------------------------------------------
 # Startup
 # ---------------------------------------------------------------------------
