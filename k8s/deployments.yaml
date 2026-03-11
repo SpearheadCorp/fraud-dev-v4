@@ -332,7 +332,7 @@ spec:
             - name: MODEL_REPO
               value: /data/models
             - name: TRAIN_INTERVAL_SEC
-              value: "60"
+              value: "30"
             - name: MAX_FILES
               value: "200"
             - name: MIN_NEW_FILES
@@ -345,8 +345,6 @@ spec:
               value: "32"
             - name: GNN_MAX_TX
               value: "500000"
-            - name: TRAIN_INTERVAL_SEC
-              value: "30"
           volumeMounts:
             - name: features-data
               mountPath: /data/features
