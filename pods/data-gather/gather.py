@@ -601,7 +601,9 @@ def main() -> None:
                 df_chunk["chunk_ts"] = np.float64(time.time())  # pipeline latency anchor
                 table = pa.Table.from_pandas(df_chunk, preserve_index=False)
                 out_file = OUTPUT_PATH / fname
-                pq.write_table(table, str(out_file), compression=None)
+                tmp_file = out_file.with_suffix(".parquet.tmp")
+                pq.write_table(table, str(tmp_file), compression=None)
+                tmp_file.rename(out_file)
 
                 total_rows += len(df_chunk)
                 total_bytes += out_file.stat().st_size
@@ -679,7 +681,9 @@ def main() -> None:
                     df_chunk["chunk_ts"] = np.float64(time.time())  # pipeline latency anchor
                     table = pa.Table.from_pandas(df_chunk, preserve_index=False)
                     out_file = OUTPUT_PATH / fname
-                    pq.write_table(table, str(out_file), compression=None)
+                    tmp_file = out_file.with_suffix(".parquet.tmp")
+                    pq.write_table(table, str(tmp_file), compression=None)
+                    tmp_file.rename(out_file)
 
                     total_rows += len(df_chunk)
                     try:
