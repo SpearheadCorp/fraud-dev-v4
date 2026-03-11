@@ -61,11 +61,18 @@
   }
   #pod-modal-backdrop.visible { display: flex; }
   #pod-modal {
+    position: relative;
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
     padding: 28px 32px; min-width: 400px; max-width: 520px; width: 90%;
     box-shadow: 0 20px 60px rgba(0,0,0,0.6);
   }
-  #pod-modal h2 { margin: 0 0 6px; font-size: 18px; color: var(--text); }
+  #pod-modal-close-x {
+    position: absolute; top: 10px; right: 14px;
+    background: none; border: none; color: var(--text-muted); font-size: 22px;
+    cursor: pointer; padding: 2px 6px; line-height: 1; border-radius: 4px;
+  }
+  #pod-modal-close-x:hover { color: var(--text); background: rgba(255,255,255,0.08); }
+  #pod-modal h2 { margin: 0 0 6px; font-size: 18px; color: var(--text); padding-right: 28px; }
   #pod-modal .pod-modal-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 22px; }
   #pod-modal-chips { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
   .pod-modal-row { display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 6px 10px; border-radius: 5px; background: rgba(255,255,255,0.03); }
@@ -194,6 +201,7 @@
 
 <div id="pod-modal-backdrop">
   <div id="pod-modal">
+    <button id="pod-modal-close-x" onclick="hidePodModal()" title="Close">&times;</button>
     <h2 id="pod-modal-title">🚀 Starting Pipeline…</h2>
     <p class="pod-modal-sub" id="pod-modal-sub">Pods are scaling up — takes 20–60 s on first start</p>
     <div id="pod-modal-chips"></div>
@@ -1078,14 +1086,10 @@ function _ctlShow(title, sub) {
   document.getElementById('pod-modal-title').style.color    = 'var(--text)';
   document.getElementById('pod-modal-sub').textContent      = sub;
   document.getElementById('pod-modal-dismiss').style.display = 'none';
+  document.getElementById('pod-modal-cancel').style.display  = 'none';
   document.getElementById('pod-modal-chips').innerHTML      = '';
   document.getElementById('pod-modal-backdrop').classList.add('visible');
   ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
-  // Always show cancel so user can dismiss a stuck modal
-  const can = document.getElementById('pod-modal-cancel');
-  can.textContent = 'Cancel';
-  can.style.display = 'block';
-  can.onclick = () => { hidePodModal(); };
 }
 
 // Show a styled confirm dialog inside the modal. Returns a Promise<boolean>.
