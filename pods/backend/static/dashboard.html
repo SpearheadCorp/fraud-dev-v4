@@ -1307,38 +1307,12 @@ async function resetPipeline() {
 async function toggleStress() {
   if (stressActive) {
     // Stop stress — scale back to normal replicas
-    _ctlShow('🔄 Returning to Normal Mode…', 'Scaling down to standard replica counts');
+    _ctlShow('🔄 Returning to Normal Mode…', 'Scaling scoring back to standard');
     const steps = [
       {
         label:  'Restoring normal config',
         action: () => fetch('/api/control/stress-stop', { method: 'POST' }),
       },
-      { label: 'Data Gather → x4', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['data-gather'] || {}).desired === 4;
-        }},
-      { label: 'Data Prep → x1', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['data-prep'] || {}).desired === 1;
-        }},
-      { label: 'Model Train → running', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return (d.services || {})['model-train'] === 'Ready';
-        }},
-    ];
-    await _ctlRunSteps(steps, '🔄 Normal Mode', 'Pipeline running at standard throughput.', null, null);
-  } else {
-    // Start stress — flood with data, single GPU works harder on larger batches
-    _ctlShow('⚡ Activating Stress Mode…', 'Scaling data-gather to 8 for maximum NFS throughput');
-    const steps = [
-      {
-        label:  'Activating high-throughput config',
-        action: () => fetch('/api/control/stress', { method: 'POST' }),
-      },
-      { label: 'Data Gather → x8', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['data-gather'] || {}).desired === 8;
-        }},
       { label: 'Scoring → x2', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
           return ((d.replicas || {})['scoring'] || {}).desired === 2;
@@ -1348,7 +1322,25 @@ async function toggleStress() {
           return (d.services || {})['model-train'] === 'Ready';
         }},
     ];
-    await _ctlRunSteps(steps, '⚡ Stress Mode Active', 'Pipeline running at maximum throughput.', null, null);
+    await _ctlRunSteps(steps, '🔄 Normal Mode', 'Pipeline running at standard throughput.', null, null);
+  } else {
+    // Start stress — scale scoring for higher throughput (all 4 GPUs already active)
+    _ctlShow('⚡ Activating Stress Mode…', 'Scaling scoring to x4 for maximum throughput');
+    const steps = [
+      {
+        label:  'Activating high-throughput config',
+        action: () => fetch('/api/control/stress', { method: 'POST' }),
+      },
+      { label: 'Scoring → x4', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return ((d.replicas || {})['scoring'] || {}).desired === 4;
+        }},
+      { label: 'Model Train → running', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return (d.services || {})['model-train'] === 'Ready';
+        }},
+    ];
+    await _ctlRunSteps(steps, '⚡ Stress Mode Active', 'All 4 GPUs active, scoring at maximum throughput.', null, null);
   }
 }
 

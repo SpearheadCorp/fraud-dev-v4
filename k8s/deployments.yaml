@@ -87,7 +87,7 @@ spec:
             claimName: model-repo-pvc
 
 ---
-# ── data-gather (CPU, no GPU) ─────────────────────────────────────────────────
+# ── data-gather (GPU — RAPIDS/cuDF synthetic data generation) ─────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -95,6 +95,8 @@ metadata:
   namespace: fraud-det-v31
 spec:
   replicas: 0
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: data-gather
@@ -103,8 +105,8 @@ spec:
       labels:
         app: data-gather
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29   # pin to .44 — insecure registry works here
+      # No nodeSelector — GPU scheduler places on node with available GPU.
+      # Normal: lands on .40 (idle GPU). .44 has prep + triton.
       containers:
         - name: data-gather
           image: 10.23.181.247:5000/fraud-det-v31/data-gather:latest
@@ -114,21 +116,22 @@ spec:
               value: /data/raw
             - name: RUN_MODE
               value: continuous
-            - name: NUM_WORKERS
-              value: "8"
             - name: CHUNK_SIZE
               value: "1000000"
             - name: TARGET_ROWS_PER_SEC
-              value: "100000"
+              value: "0"
             - name: KAGGLE_SEED_PATH
               value: /app/seed-data/credit_card_transactions.csv.zip
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
-            initialDelaySeconds: 60
+            initialDelaySeconds: 120
             periodSeconds: 30
             failureThreshold: 3
       volumes:

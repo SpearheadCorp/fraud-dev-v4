@@ -1,7 +1,7 @@
 """
 Pipeline control (v4): Deployment scaling for continuous pipeline stages.
-Normal mode: 32 NFS writers (4 gather × 8 workers), 2 prep, 2 scoring, 1 triton, 1 model-train.
-Stress mode: 128 NFS writers (8 gather × 16 workers), model-train paused.
+Normal mode: 1 GPU gather, 1 GPU prep, 1 triton, 2 scoring, 1 model-train (all 4 GPUs used).
+Stress mode: same GPU pods (can't add more GPUs), scoring scales to 4.
 """
 import logging
 import os
@@ -16,19 +16,19 @@ log = logging.getLogger(__name__)
 NAMESPACE = os.environ.get("K8S_NAMESPACE", "fraud-det-v31")
 
 NORMAL_REPLICAS = {
-    "data-gather":   4,   # 4 pods × 8 workers = 32 NFS writers
-    "data-prep":     1,   # 1 GPU on .44 (other GPU = triton)
-    "triton":        1,
+    "data-gather":   1,   # 1 GPU pod on .40 (cupy/cudf generation)
+    "data-prep":     1,   # 1 GPU on .44
+    "triton":        1,   # 1 GPU on .44
     "scoring":       2,
-    "model-train":   1,   # 1 GPU on .40
+    "model-train":   1,   # 1 GPU on .40 — all 4 L40S GPUs active
 }
 
 STRESS_REPLICAS = {
-    "data-gather":   8,   # 8 pods × 16 workers = 128 NFS writers
-    "data-prep":     1,   # single GPU, larger batches (BATCH_FILES=16 → 16M rows)
+    "data-gather":   1,   # GPU — can't add replicas (all 4 GPUs used)
+    "data-prep":     1,
     "triton":        1,
-    "scoring":       2,
-    "model-train":   1,   # keeps training — no GPU contention (prep on .44, train on .40)
+    "scoring":       4,   # scale CPU scoring for higher throughput
+    "model-train":   1,
 }
 
 
