@@ -659,6 +659,7 @@ def main() -> None:
                     if _SHUTDOWN:
                         break
 
+                    Path("/tmp/.healthy").touch()  # liveness heartbeat per chunk
                     chunk_start = time.time()
                     chunks_since_disk_check += 1
                     if chunks_since_disk_check >= 10:

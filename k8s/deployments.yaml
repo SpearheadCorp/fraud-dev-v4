@@ -127,10 +127,10 @@ spec:
               mountPath: /data/raw
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
             initialDelaySeconds: 60
-            periodSeconds: 15
-            failureThreshold: 2
+            periodSeconds: 30
+            failureThreshold: 3
       volumes:
         - name: raw-data
           persistentVolumeClaim:
