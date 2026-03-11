@@ -25,10 +25,10 @@ NORMAL_REPLICAS = {
 
 STRESS_REPLICAS = {
     "data-gather":   8,   # 8 pods × 16 workers = 128 NFS writers
-    "data-prep":     2,
+    "data-prep":     1,   # single GPU, larger batches (BATCH_FILES=16 → 16M rows)
     "triton":        1,
     "scoring":       2,
-    "model-train":   0,   # paused during stress — frees GPU for prep replica
+    "model-train":   1,   # keeps training — no GPU contention (prep on .44, train on .40)
 }
 
 
