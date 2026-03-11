@@ -846,14 +846,14 @@ function updateDashboard(data) {
   }
   if (rows.length) document.getElementById('speedup-table').innerHTML = rows.join('');
 
-  // Storage
-  const stor = data.storage || {};
-  document.getElementById('raw-files').textContent     = stor.raw_files || 0;
-  document.getElementById('raw-size').textContent      = (stor.raw_size_gb || 0).toFixed(2) + ' GB';
-  document.getElementById('feat-files').textContent    = stor.features_files || 0;
+  // Storage (infra tab)
+  const storInfra = data.storage || {};
+  document.getElementById('raw-files').textContent     = storInfra.raw_files || 0;
+  document.getElementById('raw-size').textContent      = (storInfra.raw_size_gb || 0).toFixed(2) + ' GB';
+  document.getElementById('feat-files').textContent    = storInfra.features_files || 0;
   const mr = document.getElementById('models-ready');
-  mr.textContent = stor.models_ready ? 'Yes' : 'No';
-  mr.style.color = stor.models_ready ? 'var(--green)' : 'var(--text-muted)';
+  mr.textContent = storInfra.models_ready ? 'Yes' : 'No';
+  mr.style.color = storInfra.models_ready ? 'var(--green)' : 'var(--text-muted)';
 
   // Model metrics from telemetry
   if (train.f1_gpu) {
