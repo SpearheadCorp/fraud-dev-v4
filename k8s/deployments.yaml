@@ -105,8 +105,8 @@ spec:
       labels:
         app: data-gather
     spec:
-      # No nodeSelector — GPU scheduler places on node with available GPU.
-      # Normal: lands on .40 (idle GPU). .44 has prep + triton.
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-25   # pin to .40 — .44 reserved for prep + triton
       containers:
         - name: data-gather
           image: 10.23.181.247:5000/fraud-det-v31/data-gather:latest

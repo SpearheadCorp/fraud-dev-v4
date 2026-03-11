@@ -505,7 +505,10 @@ def main() -> None:
              cudf.__version__, cp.__version__, cp.cuda.Device().id)
 
     OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.chmod(0o777)
+    try:
+        OUTPUT_PATH.chmod(0o777)
+    except PermissionError:
+        pass  # RAPIDS container runs as non-root; dir already writable from gather pod
 
     # Load seed distributions (one-time CPU work with scipy).
     if KAGGLE_SEED_PATH and Path(KAGGLE_SEED_PATH).exists():
