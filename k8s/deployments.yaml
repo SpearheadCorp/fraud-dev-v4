@@ -1,6 +1,11 @@
-# Continuous pipeline deployments (v3.2)
+# Pipeline deployments (v4)
 # All pipeline stages start at replicas=0; backend scales them on Start.
-# model-build is still a Job (offline, pre-demo): kubectl apply -f k8s/jobs/model-build.yaml
+# model-build Job (offline, pre-demo) still available: kubectl apply -f k8s/jobs/model-build.yaml
+#
+# GPU layout (normal):
+#   Node .44 (slc6-lg-n3-b30-29): data-prep (1 GPU) + triton (1 GPU)
+#   Node .40 (slc6-lg-n3-b30-25): model-train (1 GPU) + 1 idle
+# GPU layout (stress): model-train paused, extra prep replica uses freed GPU on .40
 
 ---
 # ── Backend ───────────────────────────────────────────────────────────────────
@@ -33,18 +38,12 @@ spec:
               value: fraud-det-v31
             - name: PROMETHEUS_URL
               value: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
-            - name: OUTPUT_PATH_GPU
-              value: /data/raw/gpu
-            - name: OUTPUT_PATH_CPU
-              value: /data/raw/cpu
-            - name: FEATURES_GPU_PATH
-              value: /data/features/gpu
-            - name: FEATURES_CPU_DATA_PATH
-              value: /data/features-cpu
-            - name: SCORES_GPU_PATH
-              value: /data/features/scores
-            - name: SCORES_CPU_PATH
-              value: /data/features-cpu/scores
+            - name: OUTPUT_PATH
+              value: /data/raw
+            - name: FEATURES_PATH
+              value: /data/features
+            - name: SCORES_PATH
+              value: /data/scores
             - name: MODEL_REPO_PATH
               value: /data/models
             - name: STRESS_CONFIG_PATH
@@ -62,8 +61,8 @@ spec:
               mountPath: /data/raw
             - name: features-data
               mountPath: /data/features
-            - name: features-cpu-data
-              mountPath: /data/features-cpu
+            - name: scores-data
+              mountPath: /data/scores
             - name: model-repo
               mountPath: /data/models
           readinessProbe:
@@ -79,15 +78,15 @@ spec:
         - name: features-data
           persistentVolumeClaim:
             claimName: features-data-pvc
-        - name: features-cpu-data
+        - name: scores-data
           persistentVolumeClaim:
-            claimName: features-cpu-data-pvc
+            claimName: features-cpu-data-pvc   # repurposed as scores storage (100Gi)
         - name: model-repo
           persistentVolumeClaim:
             claimName: model-repo-pvc
 
 ---
-# ── data-gather ───────────────────────────────────────────────────────────────
+# ── data-gather (CPU, no GPU) ─────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -103,17 +102,14 @@ spec:
       labels:
         app: data-gather
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29
+      # No nodeSelector — CPU pod, can land on either node. Stress scales to 4 replicas.
       containers:
         - name: data-gather
           image: 10.23.181.247:5000/fraud-det-v31/data-gather:latest
           imagePullPolicy: Always
           env:
-            - name: OUTPUT_PATH_GPU
-              value: /data/raw/gpu
-            - name: OUTPUT_PATH_CPU
-              value: /data/raw/cpu
+            - name: OUTPUT_PATH
+              value: /data/raw
             - name: RUN_MODE
               value: continuous
             - name: NUM_WORKERS
@@ -139,39 +135,39 @@ spec:
             claimName: raw-data-pvc
 
 ---
-# ── data-prep-gpu ─────────────────────────────────────────────────────────────
+# ── data-prep (GPU — RAPIDS/cuDF feature engineering) ─────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: data-prep-gpu
+  name: data-prep
   namespace: fraud-det-v31
 spec:
   replicas: 0
   strategy:
-    type: Recreate   # GPU resource (1×L40S) can't be held by two pods simultaneously
+    type: Recreate
   selector:
     matchLabels:
-      app: data-prep-gpu
+      app: data-prep
   template:
     metadata:
       labels:
-        app: data-prep-gpu
+        app: data-prep
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29
+      # No hard nodeSelector — K8s scheduler places based on GPU availability.
+      # Normal: lands on .44 (2 GPUs, triton takes one). Stress: 2nd replica lands on .40.
       containers:
-        - name: data-prep-gpu
+        - name: data-prep
           image: 10.23.181.247:5000/fraud-det-v31/data-prep:latest
           imagePullPolicy: Always
           env:
             - name: INPUT_PATH
-              value: /data/raw/gpu
+              value: /data/raw
             - name: OUTPUT_PATH
-              value: /data/features/gpu
+              value: /data/features
             - name: CUDF_SPILL
               value: "1"
             - name: NUMBA_CACHE_DIR
-              value: /data/features/.numba-cache   # persists across pod restarts → skips JIT recompilation
+              value: /data/features/.numba-cache
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
@@ -183,7 +179,7 @@ spec:
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
-            initialDelaySeconds: 60   # heartbeat thread touches /tmp/.healthy within 1s of start
+            initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
       volumes:
@@ -195,54 +191,7 @@ spec:
             claimName: features-data-pvc
 
 ---
-# ── data-prep-cpu ─────────────────────────────────────────────────────────────
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: data-prep-cpu
-  namespace: fraud-det-v31
-spec:
-  replicas: 0
-  selector:
-    matchLabels:
-      app: data-prep-cpu
-  template:
-    metadata:
-      labels:
-        app: data-prep-cpu
-    spec:
-      nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29
-      containers:
-        - name: data-prep-cpu
-          image: 10.23.181.247:5000/fraud-det-v31/data-prep-cpu:latest
-          imagePullPolicy: Always
-          env:
-            - name: INPUT_PATH
-              value: /data/raw/cpu
-            - name: OUTPUT_PATH
-              value: /data/features-cpu
-          volumeMounts:
-            - name: raw-data
-              mountPath: /data/raw
-            - name: features-cpu-data
-              mountPath: /data/features-cpu
-          livenessProbe:
-            exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
-            initialDelaySeconds: 60
-            periodSeconds: 15
-            failureThreshold: 2
-      volumes:
-        - name: raw-data
-          persistentVolumeClaim:
-            claimName: raw-data-pvc
-        - name: features-cpu-data
-          persistentVolumeClaim:
-            claimName: features-cpu-data-pvc
-
----
-# ── triton (unified GPU + CPU inference) ─────────────────────────────────────
+# ── triton (Triton Inference Server — GPU) ────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -258,8 +207,7 @@ spec:
       labels:
         app: triton
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29
+      # No hard nodeSelector — placed by GPU scheduler
       containers:
         - name: triton
           image: 10.23.181.247:5000/fraud-det-v31/triton:latest
@@ -297,33 +245,32 @@ spec:
             sizeLimit: 2Gi
 
 ---
-# ── scoring-gpu ───────────────────────────────────────────────────────────────
+# ── scoring (CPU pod — calls Triton via HTTP for inference) ───────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: scoring-gpu
+  name: scoring
   namespace: fraud-det-v31
 spec:
   replicas: 0
   selector:
     matchLabels:
-      app: scoring-gpu
+      app: scoring
   template:
     metadata:
       labels:
-        app: scoring-gpu
+        app: scoring
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29
+      # No nodeSelector — CPU pod. Stress scales to 2 replicas.
       containers:
-        - name: scoring-gpu
-          image: 10.23.181.247:5000/fraud-det-v31/scoring-gpu:latest
+        - name: scoring
+          image: 10.23.181.247:5000/fraud-det-v31/scoring:latest
           imagePullPolicy: Always
           env:
             - name: FEATURES_PATH
-              value: /data/features/gpu
+              value: /data/features
             - name: SCORES_PATH
-              value: /data/features/scores
+              value: /data/scores
             - name: TRITON_URL
               value: triton:8000
             - name: MODEL_NAME
@@ -335,6 +282,8 @@ spec:
           volumeMounts:
             - name: features-data
               mountPath: /data/features
+            - name: scores-data
+              mountPath: /data/scores
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
@@ -345,46 +294,62 @@ spec:
         - name: features-data
           persistentVolumeClaim:
             claimName: features-data-pvc
+        - name: scores-data
+          persistentVolumeClaim:
+            claimName: features-cpu-data-pvc   # repurposed as scores storage
 
 ---
-# ── scoring-cpu ───────────────────────────────────────────────────────────────
+# ── model-train (GPU — continuous GNN + XGBoost training) ─────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: scoring-cpu
+  name: model-train
   namespace: fraud-det-v31
 spec:
   replicas: 0
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
-      app: scoring-cpu
+      app: model-train
   template:
     metadata:
       labels:
-        app: scoring-cpu
+        app: model-train
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29
+      # No nodeSelector — placed by GPU scheduler. Normally lands on .40 since
+      # .44's 2 GPUs are used by data-prep + triton.
       containers:
-        - name: scoring-cpu
-          image: 10.23.181.247:5000/fraud-det-v31/scoring-cpu:latest
+        - name: model-train
+          image: 10.23.181.247:5000/fraud-det-v31/model-train:latest
           imagePullPolicy: Always
           env:
-            - name: FEATURES_PATH
-              value: /data/features-cpu
-            - name: SCORES_PATH
-              value: /data/features-cpu/scores
-            - name: TRITON_URL
-              value: triton:8000
-            - name: MODEL_NAME
-              value: fraud_gnn_cpu
-            - name: WINDOW_CHUNKS
-              value: "2"
-            - name: TRITON_RETRIES
-              value: "30"
+            - name: INPUT_PATH
+              value: /data/features
+            - name: MODEL_REPO
+              value: /data/models
+            - name: TRAIN_INTERVAL_SEC
+              value: "60"
+            - name: MAX_FILES
+              value: "200"
+            - name: MIN_NEW_FILES
+              value: "20"
+            - name: GNN_EPOCHS
+              value: "16"
+            - name: GNN_HIDDEN
+              value: "16"
+            - name: GNN_OUT
+              value: "8"
+            - name: GNN_MAX_TX
+              value: "100000"
           volumeMounts:
-            - name: features-cpu-data
-              mountPath: /data/features-cpu
+            - name: features-data
+              mountPath: /data/features
+            - name: model-repo
+              mountPath: /data/models
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
@@ -392,9 +357,12 @@ spec:
             periodSeconds: 15
             failureThreshold: 2
       volumes:
-        - name: features-cpu-data
+        - name: features-data
           persistentVolumeClaim:
-            claimName: features-cpu-data-pvc
+            claimName: features-data-pvc
+        - name: model-repo
+          persistentVolumeClaim:
+            claimName: model-repo-pvc
 
 ---
 # ── Triton ClusterIP Service (scoring pods need DNS: triton:8000) ─────────────
@@ -416,6 +384,3 @@ spec:
     - name: metrics
       port: 8002
       targetPort: 8002
-
-# NOTE: Prometheus is provided by the cluster (kube-prometheus-stack in monitoring namespace).
-# GPU metrics: DCGM exporter in gpu-operator namespace via ServiceMonitor (k8s/dcgm-servicemonitor.yaml)

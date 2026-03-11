@@ -1,6 +1,6 @@
 """
-Metrics collection: telemetry (K8s pod logs), system (psutil), GPU (Prometheus/DCGM),
-FlashBlade storage latency (Prometheus/purefb exporter), queue depth, fraud scores.
+Metrics collection (v4): telemetry (K8s pod logs), system (node-exporter), GPU (Prometheus/DCGM),
+FlashBlade storage latency (REST API), queue depth, fraud scores.
 """
 import os
 import json
@@ -21,17 +21,13 @@ log = logging.getLogger(__name__)
 
 PROMETHEUS_URL    = os.environ.get("PROMETHEUS_URL",          "http://prometheus:9090")
 MODEL_REPO        = Path(os.environ.get("MODEL_REPO_PATH",    "/data/models"))
-RAW_PATH_GPU      = Path(os.environ.get("OUTPUT_PATH_GPU",    "/data/raw/gpu"))
-RAW_PATH_CPU      = Path(os.environ.get("OUTPUT_PATH_CPU",    "/data/raw/cpu"))
-FEATURES_GPU_PATH = Path(os.environ.get("FEATURES_GPU_PATH",  "/data/features/gpu"))
-FEATURES_CPU_PATH = Path(os.environ.get("FEATURES_CPU_DATA_PATH", "/data/features-cpu"))
-SCORES_GPU_PATH   = Path(os.environ.get("SCORES_GPU_PATH",    "/data/features/scores"))
-SCORES_CPU_PATH   = Path(os.environ.get("SCORES_CPU_PATH",    "/data/features-cpu/scores"))
+RAW_PATH          = Path(os.environ.get("OUTPUT_PATH",         "/data/raw"))
+FEATURES_PATH     = Path(os.environ.get("FEATURES_PATH",      "/data/features"))
+SCORES_PATH       = Path(os.environ.get("SCORES_PATH",        "/data/scores"))
 NAMESPACE         = os.environ.get("K8S_NAMESPACE",           "fraud-det-v31")
 FLASHBLADE_FS_NAME = os.environ.get("FLASHBLADE_FS_NAME",    "financial-fraud-detection-demo")
 FLASHBLADE_MGMT_IP = os.environ.get("FLASHBLADE_MGMT_IP",    "10.23.181.60")
 FLASHBLADE_API_TOKEN = os.environ.get("FLASHBLADE_API_TOKEN", "T-4c6c371d-2c99-4bb4-80f6-ab5e4879342a")
-GPU_NODE_HOSTNAME  = os.environ.get("GPU_NODE_HOSTNAME",      "slc6-lg-n3-b30-29")
 NFS_NODE_INSTANCE  = os.environ.get("NFS_NODE_INSTANCE",      "10.23.181.44:9100")
 
 _fb_session_token: Optional[str] = None
@@ -133,12 +129,10 @@ class MetricsCollector:
             "elapsed_sec": self.state.elapsed_sec,
             "timestamp":   time.time(),
             "pipeline": {
-                "gather":      telemetry.get("gather",      {}),
-                "prep_gpu":    telemetry.get("prep-gpu",    {}),
-                "prep_cpu":    telemetry.get("prep-cpu",    {}),
-                "scoring_gpu": telemetry.get("scoring-gpu", {}),
-                "scoring_cpu": telemetry.get("scoring-cpu", {}),
-                "train":       telemetry.get("train",       {}),
+                "gather":  telemetry.get("gather",  {}),
+                "prep":    telemetry.get("prep",    {}),
+                "scoring": telemetry.get("scoring", {}),
+                "train":   telemetry.get("train",   {}),
             },
             "queue":     queue,
             "fraud":     fraud,
@@ -225,13 +219,9 @@ class MetricsCollector:
         result: dict = {}
 
         # Continuous Deployment pods
-        for dep in ("data-gather", "data-prep-gpu", "data-prep-cpu", "scoring-gpu", "scoring-cpu"):
+        for dep in ("data-gather", "data-prep", "scoring", "model-train"):
             logs = self._get_deployment_pod_logs(dep)
             result.update(self._parse_lines(logs))
-
-        # model-build is still a Job (offline, run once)
-        logs = self._get_job_pod_logs("model-build")
-        result.update(self._parse_lines(logs))
 
         # Fill missing stages from cache so pod restarts don't zero out live gauges
         for stage, cached in self.state.last_telemetry.items():
@@ -247,10 +237,8 @@ class MetricsCollector:
     def _collect_queue_depth(self) -> dict:
         depths: dict = {}
         for name, path in [
-            ("raw_gpu",      RAW_PATH_GPU),
-            ("raw_cpu",      RAW_PATH_CPU),
-            ("features_gpu", FEATURES_GPU_PATH),
-            ("features_cpu", FEATURES_CPU_PATH),
+            ("raw",      RAW_PATH),
+            ("features", FEATURES_PATH),
         ]:
             try:
                 depths[name] = {
@@ -269,8 +257,8 @@ class MetricsCollector:
 
     def _collect_fraud_metrics(self) -> dict:
         try:
-            score_files = sorted(SCORES_GPU_PATH.glob("*.parquet"))[-10:] \
-                          if SCORES_GPU_PATH.exists() else []
+            score_files = sorted(SCORES_PATH.glob("*.parquet"))[-10:] \
+                          if SCORES_PATH.exists() else []
             if not score_files:
                 return {}
             df = pd.concat([pd.read_parquet(str(f)) for f in score_files], ignore_index=True)
@@ -340,22 +328,26 @@ class MetricsCollector:
     # ------------------------------------------------------------------
 
     def _collect_gpu(self) -> dict:
+        """Query DCGM GPU metrics for all GPU nodes (both .44 and .40)."""
         try:
             metrics: dict = {}
             for metric_name, key_prefix in [
-                ("DCGM_FI_DEV_GPU_UTIL",     "gpu_{}_util_pct"),
-                ("DCGM_FI_DEV_MEM_COPY_UTIL", "gpu_{}_mem_pct"),
+                ("DCGM_FI_DEV_GPU_UTIL",     "gpu_{host}_{gpu}_util_pct"),
+                ("DCGM_FI_DEV_MEM_COPY_UTIL", "gpu_{host}_{gpu}_mem_pct"),
             ]:
-                query = (f'{metric_name}{{Hostname="{GPU_NODE_HOSTNAME}"}}'
-                         if GPU_NODE_HOSTNAME else metric_name)
+                # No hostname filter — get all GPUs across all nodes
                 resp = requests.get(
                     f"{PROMETHEUS_URL}/api/v1/query",
-                    params={"query": query}, timeout=3,
+                    params={"query": metric_name}, timeout=3,
                 )
                 resp.raise_for_status()
                 for result in resp.json().get("data", {}).get("result", []):
                     gpu_id = result.get("metric", {}).get("gpu", "0")
-                    metrics[key_prefix.format(gpu_id)] = float(result["value"][1])
+                    hostname = result.get("metric", {}).get("Hostname", "unknown")
+                    # Shorten hostname for readability: slc6-lg-n3-b30-29 → n29, slc6-lg-n3-b30-25 → n25
+                    short = hostname.split("-")[-1] if "-" in hostname else hostname
+                    key = key_prefix.format(host=short, gpu=gpu_id)
+                    metrics[key] = float(result["value"][1])
             return metrics if metrics else self._gpu_zeros()
         except Exception as exc:
             log.debug("[DEBUG] _collect_gpu: %s", exc)
@@ -363,7 +355,7 @@ class MetricsCollector:
 
     @staticmethod
     def _gpu_zeros() -> dict:
-        return {"gpu_0_util_pct": 0.0, "gpu_0_mem_pct": 0.0}
+        return {"gpu_n29_0_util_pct": 0.0, "gpu_n29_0_mem_pct": 0.0}
 
     # ------------------------------------------------------------------
     # FlashBlade latency via REST API (file-systems/performance)
@@ -415,8 +407,8 @@ class MetricsCollector:
     # ------------------------------------------------------------------
 
     def _compute_kpis(self, telemetry: dict) -> dict:
-        gather     = telemetry.get("gather",      self.state.last_telemetry.get("gather", {}))
-        scoring    = telemetry.get("scoring-gpu", self.state.last_telemetry.get("scoring-gpu", {}))
+        gather     = telemetry.get("gather",  self.state.last_telemetry.get("gather", {}))
+        scoring    = telemetry.get("scoring", self.state.last_telemetry.get("scoring", {}))
         total_txns = int(gather.get("rows_generated", 0))
         # Prefer real fraud rate from scorer; fall back to gather synthetic rate
         fraud_rate = float(scoring.get("fraud_rate",
@@ -439,24 +431,19 @@ class MetricsCollector:
 
     def _collect_storage(self) -> dict:
         try:
-            raw_gpu_files  = list(RAW_PATH_GPU.glob("*.parquet"))  if RAW_PATH_GPU.exists()      else []
-            raw_cpu_files  = list(RAW_PATH_CPU.glob("*.parquet"))  if RAW_PATH_CPU.exists()      else []
-            feat_gpu_files = list(FEATURES_GPU_PATH.glob("*.parquet")) if FEATURES_GPU_PATH.exists() else []
-            feat_cpu_files = list(FEATURES_CPU_PATH.glob("*.parquet")) if FEATURES_CPU_PATH.exists() else []
-            raw_size = sum(f.stat().st_size for f in raw_gpu_files + raw_cpu_files) / 1e9
+            raw_files  = list(RAW_PATH.glob("*.parquet"))      if RAW_PATH.exists()      else []
+            feat_files = list(FEATURES_PATH.glob("*.parquet")) if FEATURES_PATH.exists() else []
+            raw_size = sum(f.stat().st_size for f in raw_files) / 1e9
             models_ready = (MODEL_REPO / "fraud_gnn_gpu" / "1" / "state_dict_gnn.pth").exists()
             return {
-                "raw_gpu_files":      len(raw_gpu_files),
-                "raw_cpu_files":      len(raw_cpu_files),
-                "raw_size_gb":        round(raw_size, 2),
-                "features_gpu_files": len(feat_gpu_files),
-                "features_cpu_files": len(feat_cpu_files),
-                "models_ready":       models_ready,
+                "raw_files":      len(raw_files),
+                "raw_size_gb":    round(raw_size, 2),
+                "features_files": len(feat_files),
+                "models_ready":   models_ready,
             }
         except Exception as exc:
             log.debug("[DEBUG] _collect_storage: %s", exc)
-            return {"raw_gpu_files": 0, "raw_cpu_files": 0, "raw_size_gb": 0.0,
-                    "features_gpu_files": 0, "features_cpu_files": 0, "models_ready": False}
+            return {"raw_files": 0, "raw_size_gb": 0.0, "features_files": 0, "models_ready": False}
 
 
 def load_shap_summary() -> Optional[dict]:

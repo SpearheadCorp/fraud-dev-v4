@@ -8,6 +8,6 @@ RUN pip install --no-cache-dir \
     torch \
     torch_geometric
 
-COPY pods/scoring-gpu/scorer.py /app/scorer.py
+COPY pods/scoring/scorer.py /app/scorer.py
 WORKDIR /app
 CMD ["python", "scorer.py"]

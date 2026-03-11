@@ -46,9 +46,9 @@ signal.signal(signal.SIGINT, _handle_signal)
 # ---------------------------------------------------------------------------
 # Configuration from environment
 # ---------------------------------------------------------------------------
-OUTPUT_PATH = Path(os.environ.get("OUTPUT_PATH", "/data/raw"))  # legacy fallback
-OUTPUT_PATH_GPU = Path(os.environ.get("OUTPUT_PATH_GPU", "/data/raw/gpu"))
-OUTPUT_PATH_CPU = Path(os.environ.get("OUTPUT_PATH_CPU", "/data/raw/cpu"))
+OUTPUT_PATH = Path(os.environ.get("OUTPUT_PATH", "/data/raw"))
+# Hostname prefix for filenames — prevents collisions when multiple replicas run in stress mode.
+HOSTNAME = os.environ.get("HOSTNAME", f"gather-{os.getpid()}")
 NUM_WORKERS = int(os.environ.get("NUM_WORKERS", str(max(1, (os.cpu_count() or 2) // 2))))
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "10000"))
 FRAUD_RATE = float(os.environ.get("FRAUD_RATE", "0.005"))
@@ -518,11 +518,9 @@ def emit_telemetry(total_rows: int, total_bytes: float, files_written: int,
 def main() -> None:
     global _SHUTDOWN
 
-    OUTPUT_PATH_GPU.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH_CPU.mkdir(parents=True, exist_ok=True)
-    # Make queue dirs world-writable so non-root prep pods (e.g. RAPIDS uid=1001) can rename files
-    OUTPUT_PATH_GPU.chmod(0o777)
-    OUTPUT_PATH_CPU.chmod(0o777)
+    OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
+    # Make queue dir world-writable so non-root prep pods (e.g. RAPIDS uid=1001) can rename files
+    OUTPUT_PATH.chmod(0o777)
 
     # Load distributions
     if KAGGLE_SEED_PATH and Path(KAGGLE_SEED_PATH).exists():
@@ -586,7 +584,7 @@ def main() -> None:
                 chunks_since_disk_check += 1
                 if chunks_since_disk_check >= 10:
                     chunks_since_disk_check = 0
-                    usage_pct, should_stop = check_disk_space(OUTPUT_PATH_GPU)
+                    usage_pct, should_stop = check_disk_space(OUTPUT_PATH)
                     if should_stop:
                         sys.stdout.write(
                             f"[TELEMETRY] stage=gather status=PAUSED reason=disk_full "
@@ -599,16 +597,14 @@ def main() -> None:
                         log.warning("[WARN] Disk usage %.0f%% > 80%%, consider cleanup", usage_pct * 100)
 
                 idx = files_written
-                fname = f"raw_chunk_{idx:06d}.parquet"
+                fname = f"{HOSTNAME}_raw_chunk_{idx:06d}.parquet"
                 df_chunk["chunk_ts"] = np.float64(time.time())  # pipeline latency anchor
                 table = pa.Table.from_pandas(df_chunk, preserve_index=False)
-                out_gpu = OUTPUT_PATH_GPU / fname
-                out_cpu = OUTPUT_PATH_CPU / fname
-                pq.write_table(table, str(out_gpu), compression=None)
-                pq.write_table(table, str(out_cpu), compression=None)
+                out_file = OUTPUT_PATH / fname
+                pq.write_table(table, str(out_file), compression=None)
 
                 total_rows += len(df_chunk)
-                total_bytes += out_gpu.stat().st_size * 2
+                total_bytes += out_file.stat().st_size
                 files_written += 1
                 actual_fraud_rate = float(df_chunk["is_fraud"].mean())
 
@@ -665,7 +661,7 @@ def main() -> None:
                     chunks_since_disk_check += 1
                     if chunks_since_disk_check >= 10:
                         chunks_since_disk_check = 0
-                        usage_pct, should_stop = check_disk_space(OUTPUT_PATH_GPU)
+                        usage_pct, should_stop = check_disk_space(OUTPUT_PATH)
                         if should_stop:
                             sys.stdout.write(
                                 f"[TELEMETRY] stage=gather status=PAUSED reason=disk_full "
@@ -679,17 +675,15 @@ def main() -> None:
                             log.warning("[WARN] Disk usage %.0f%% > 80%%", usage_pct * 100)
 
                     idx = files_written
-                    fname = f"raw_chunk_{idx:06d}.parquet"
+                    fname = f"{HOSTNAME}_raw_chunk_{idx:06d}.parquet"
                     df_chunk["chunk_ts"] = np.float64(time.time())  # pipeline latency anchor
                     table = pa.Table.from_pandas(df_chunk, preserve_index=False)
-                    out_gpu = OUTPUT_PATH_GPU / fname
-                    out_cpu = OUTPUT_PATH_CPU / fname
-                    pq.write_table(table, str(out_gpu), compression=None)
-                    pq.write_table(table, str(out_cpu), compression=None)
+                    out_file = OUTPUT_PATH / fname
+                    pq.write_table(table, str(out_file), compression=None)
 
                     total_rows += len(df_chunk)
                     try:
-                        total_bytes += out_gpu.stat().st_size * 2
+                        total_bytes += out_file.stat().st_size
                     except FileNotFoundError:
                         pass  # prep worker already claimed the file — size estimate not critical
                     files_written += 1

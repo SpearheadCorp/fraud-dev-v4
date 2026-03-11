@@ -1,8 +1,8 @@
 """
-Pod: backend
+Pod: backend (v4)
 FastAPI control plane + real-time WebSocket dashboard.
 Controls continuous pipeline Deployments via kubernetes Python client;
-streams metrics to browser. model-build is run manually (offline).
+streams metrics to browser.
 """
 import asyncio
 import logging
@@ -26,13 +26,10 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-RAW_PATH_GPU      = Path(os.environ.get("OUTPUT_PATH_GPU",      "/data/raw/gpu"))
-RAW_PATH_CPU      = Path(os.environ.get("OUTPUT_PATH_CPU",      "/data/raw/cpu"))
-FEATURES_GPU_PATH = Path(os.environ.get("FEATURES_GPU_PATH",   "/data/features/gpu"))
-FEATURES_CPU_PATH = Path(os.environ.get("FEATURES_CPU_DATA_PATH", "/data/features-cpu"))
-SCORES_GPU_PATH   = Path(os.environ.get("SCORES_GPU_PATH",     "/data/features/scores"))
-SCORES_CPU_PATH   = Path(os.environ.get("SCORES_CPU_PATH",     "/data/features-cpu/scores"))
-MODEL_REPO_PATH   = Path(os.environ.get("MODEL_REPO_PATH",     "/data/models"))
+RAW_PATH          = Path(os.environ.get("OUTPUT_PATH",       "/data/raw"))
+FEATURES_PATH     = Path(os.environ.get("FEATURES_PATH",    "/data/features"))
+SCORES_PATH       = Path(os.environ.get("SCORES_PATH",      "/data/scores"))
+MODEL_REPO_PATH   = Path(os.environ.get("MODEL_REPO_PATH",  "/data/models"))
 STRESS_CONFIG_PATH = Path(os.environ.get("STRESS_CONFIG_PATH", "/data/raw/.stress.conf"))
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -56,7 +53,7 @@ def _write_gather_config(workers: int, rate: int) -> None:
 state = mt.PipelineState()
 collector = mt.MetricsCollector(state)
 
-app = FastAPI(title="Fraud Detection Demo v3.2", version="3.2.0")
+app = FastAPI(title="Fraud Detection Demo v4", version="4.0.0")
 
 # Serve static files (dashboard.html)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -112,9 +109,7 @@ async def reset_pipeline():
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None, lambda: pl.reset_pipeline(
-            RAW_PATH_GPU, RAW_PATH_CPU,
-            FEATURES_GPU_PATH, FEATURES_CPU_PATH,
-            SCORES_GPU_PATH, SCORES_CPU_PATH,
+            RAW_PATH, FEATURES_PATH, SCORES_PATH,
         )
     )
     telemetry_file = MODEL_REPO_PATH / "last_telemetry.json"
@@ -129,9 +124,7 @@ async def clear_data():
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(
         None, lambda: pl.clear_data_files(
-            RAW_PATH_GPU, RAW_PATH_CPU,
-            FEATURES_GPU_PATH, FEATURES_CPU_PATH,
-            SCORES_GPU_PATH, SCORES_CPU_PATH,
+            RAW_PATH, FEATURES_PATH, SCORES_PATH,
         )
     )
     telemetry_file = MODEL_REPO_PATH / "last_telemetry.json"
@@ -246,8 +239,7 @@ async def startup_event():
     # Initialise psutil cpu_percent (first call returns 0.0)
     psutil.cpu_percent(interval=None)
     # Ensure data directories exist
-    for p in (RAW_PATH_GPU, RAW_PATH_CPU, FEATURES_GPU_PATH, FEATURES_CPU_PATH,
-              SCORES_GPU_PATH, SCORES_CPU_PATH):
+    for p in (RAW_PATH, FEATURES_PATH, SCORES_PATH):
         p.mkdir(parents=True, exist_ok=True)
     # Infer is_running from actual K8s deployment states (survives pod restarts)
     try:

@@ -1,5 +1,5 @@
 """
-Pod: scoring-gpu
+Pod: scoring (v4)
 Continuous file-queue worker. Atomically claims feature parquet chunks from
 FEATURES_PATH, builds a sliding-window tri-partite graph, calls Triton
 (fraud_gnn_gpu model) for GNN+XGBoost inference, writes fraud scores to
@@ -54,8 +54,8 @@ threading.Thread(target=_liveness_heartbeat, daemon=True, name="liveness").start
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-FEATURES_PATH = Path(os.environ.get("FEATURES_PATH", "/data/features/gpu"))
-SCORES_PATH   = Path(os.environ.get("SCORES_PATH",   "/data/features/scores"))
+FEATURES_PATH = Path(os.environ.get("FEATURES_PATH", "/data/features"))
+SCORES_PATH   = Path(os.environ.get("SCORES_PATH",   "/data/scores"))
 TRITON_URL    = os.environ.get("TRITON_URL",    "triton:8000")
 MODEL_NAME    = os.environ.get("MODEL_NAME",    "fraud_gnn_gpu")
 WINDOW_CHUNKS = int(os.environ.get("WINDOW_CHUNKS", "10"))
@@ -225,7 +225,7 @@ def score_chunk(
 def emit_telemetry(chunk_id: int, rows: int, latency_ms: float, fraud_rate: float,
                    decision_latency_ms: float = 0.0) -> None:
     sys.stdout.write(
-        f"[TELEMETRY] stage=scoring-gpu chunk_id={chunk_id} rows={rows} "
+        f"[TELEMETRY] stage=scoring chunk_id={chunk_id} rows={rows} "
         f"latency_ms={latency_ms:.1f} fraud_rate={fraud_rate:.4f} "
         f"decision_latency_ms={decision_latency_ms:.0f}\n"
     )
@@ -239,7 +239,7 @@ def emit_telemetry(chunk_id: int, rows: int, latency_ms: float, fraud_rate: floa
 def main() -> None:
     FEATURES_PATH.mkdir(parents=True, exist_ok=True)
     SCORES_PATH.mkdir(parents=True, exist_ok=True)
-    log.info("[INFO] scoring-gpu started: FEATURES=%s SCORES=%s MODEL=%s TRITON=%s",
+    log.info("[INFO] scoring started: FEATURES=%s SCORES=%s MODEL=%s TRITON=%s",
              FEATURES_PATH, SCORES_PATH, MODEL_NAME, TRITON_URL)
 
     graph  = WindowedGraph(WINDOW_CHUNKS)
@@ -320,7 +320,7 @@ def main() -> None:
                  chunk_id, len(df), latency_ms, fraud_rate)
         chunk_id += 1
 
-    log.info("[INFO] scoring-gpu shutdown after %d chunks", chunk_id)
+    log.info("[INFO] scoring shutdown after %d chunks", chunk_id)
 
 
 if __name__ == "__main__":

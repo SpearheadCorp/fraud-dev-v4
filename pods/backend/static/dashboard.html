@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fraud Detection Demo v3.1</title>
+<title>Fraud Detection Demo v4</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
@@ -180,7 +180,7 @@
 <div id="stress-banner">⚡ STRESS MODE ACTIVE — Accelerated workload in progress</div>
 
 <header>
-  <h1>Fraud Detection Demo v3.1 — GNN + XGBoost</h1>
+  <h1>Fraud Detection Demo v4 — GNN + XGBoost</h1>
   <div class="live-badge"><div class="live-dot"></div>LIVE</div>
   <span class="elapsed" id="elapsed">00:00:00 elapsed</span>
   <span id="conn-status" class="disconnected">● Connecting...</span>
@@ -236,51 +236,30 @@
   </div>
 
   <div class="chart-card" style="margin-bottom:0">
-    <div class="chart-title">Live Pipeline Throughput — Continuous Dual-Lane</div>
-    <!-- GPU Lane -->
-    <div style="margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:#bc8cff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">GPU Lane</div>
-      <div style="display:flex;gap:0;align-items:stretch;font-size:12px">
-        <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
-          <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">↓ Generate</div>
-          <div style="font-size:15px;font-weight:700;color:#e6edf3" id="lane-gpu-gen">—</div>
-          <div style="font-size:10px;color:var(--text-muted)" id="lane-gpu-gen-q"></div>
-        </div>
-        <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
-        <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
-          <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">↓ Prep GPU</div>
-          <div style="font-size:15px;font-weight:700;color:#bc8cff" id="lane-gpu-prep">—</div>
-          <div style="font-size:10px;color:var(--text-muted)" id="lane-gpu-prep-sub"></div>
-        </div>
-        <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
-        <div style="flex:1;text-align:center;padding:8px 6px">
-          <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">↓ Score GPU</div>
-          <div style="font-size:15px;font-weight:700;color:#3fb950" id="lane-gpu-score">—</div>
-          <div style="font-size:10px;color:var(--text-muted)" id="lane-gpu-score-sub"></div>
-        </div>
+    <div class="chart-title">Live Pipeline Throughput</div>
+    <div style="display:flex;gap:0;align-items:stretch;font-size:12px">
+      <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
+        <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">Generate</div>
+        <div style="font-size:15px;font-weight:700;color:#e6edf3" id="lane-gen">—</div>
+        <div style="font-size:10px;color:var(--text-muted)" id="lane-gen-q"></div>
       </div>
-    </div>
-    <!-- CPU Lane -->
-    <div style="border-top:1px solid var(--border);padding-top:10px">
-      <div style="font-size:11px;font-weight:700;color:#58a6ff;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.06em">CPU Lane</div>
-      <div style="display:flex;gap:0;align-items:stretch;font-size:12px">
-        <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
-          <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">↓ Generate</div>
-          <div style="font-size:15px;font-weight:700;color:#e6edf3" id="lane-cpu-gen">—</div>
-          <div style="font-size:10px;color:var(--text-muted)" id="lane-cpu-gen-q"></div>
-        </div>
-        <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
-        <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
-          <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">↓ Prep CPU</div>
-          <div style="font-size:15px;font-weight:700;color:#58a6ff" id="lane-cpu-prep">—</div>
-          <div style="font-size:10px;color:var(--text-muted)" id="lane-cpu-prep-sub"></div>
-        </div>
-        <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
-        <div style="flex:1;text-align:center;padding:8px 6px">
-          <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">↓ Score CPU</div>
-          <div style="font-size:15px;font-weight:700;color:#39d353" id="lane-cpu-score">—</div>
-          <div style="font-size:10px;color:var(--text-muted)" id="lane-cpu-score-sub"></div>
-        </div>
+      <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
+      <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
+        <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">Data Prep</div>
+        <div style="font-size:15px;font-weight:700;color:#bc8cff" id="lane-prep">—</div>
+        <div style="font-size:10px;color:var(--text-muted)" id="lane-prep-sub"></div>
+      </div>
+      <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
+      <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
+        <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">Model Train</div>
+        <div style="font-size:15px;font-weight:700;color:#e3b341" id="lane-train">—</div>
+        <div style="font-size:10px;color:var(--text-muted)" id="lane-train-sub"></div>
+      </div>
+      <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
+      <div style="flex:1;text-align:center;padding:8px 6px">
+        <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">Scoring</div>
+        <div style="font-size:15px;font-weight:700;color:#3fb950" id="lane-score">—</div>
+        <div style="font-size:10px;color:var(--text-muted)" id="lane-score-sub"></div>
       </div>
     </div>
   </div>
@@ -341,20 +320,12 @@
     <div class="chart-title">NFS File Queue Depth</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
       <div>
-        <div style="color:#bc8cff;font-weight:600;margin-bottom:4px">raw/gpu</div>
-        <div id="q-raw-gpu" style="color:var(--text-muted)">—</div>
+        <div style="color:#bc8cff;font-weight:600;margin-bottom:4px">raw</div>
+        <div id="q-raw" style="color:var(--text-muted)">—</div>
       </div>
       <div>
-        <div style="color:#58a6ff;font-weight:600;margin-bottom:4px">raw/cpu</div>
-        <div id="q-raw-cpu" style="color:var(--text-muted)">—</div>
-      </div>
-      <div>
-        <div style="color:#bc8cff;font-weight:600;margin-bottom:4px">features/gpu</div>
-        <div id="q-feat-gpu" style="color:var(--text-muted)">—</div>
-      </div>
-      <div>
-        <div style="color:#58a6ff;font-weight:600;margin-bottom:4px">features-cpu</div>
-        <div id="q-feat-cpu" style="color:var(--text-muted)">—</div>
+        <div style="color:#3fb950;font-weight:600;margin-bottom:4px">features</div>
+        <div id="q-feat" style="color:var(--text-muted)">—</div>
       </div>
     </div>
   </div>
@@ -386,11 +357,9 @@
   <div class="chart-card" style="margin-top:0">
     <div class="chart-title">Storage</div>
     <div style="display:flex;gap:24px;flex-wrap:wrap">
-      <div><span style="color:var(--text-muted)">Raw GPU:</span> <strong id="raw-files">0</strong></div>
-      <div><span style="color:var(--text-muted)">Raw CPU:</span> <strong id="raw-cpu-files">0</strong></div>
+      <div><span style="color:var(--text-muted)">Raw files:</span> <strong id="raw-files">0</strong></div>
       <div><span style="color:var(--text-muted)">Raw size:</span> <strong id="raw-size">0 GB</strong></div>
-      <div><span style="color:var(--text-muted)">Feat GPU:</span> <strong id="feat-files">0</strong></div>
-      <div><span style="color:var(--text-muted)">Feat CPU:</span> <strong id="feat-cpu-files">0</strong></div>
+      <div><span style="color:var(--text-muted)">Feature files:</span> <strong id="feat-files">0</strong></div>
       <div><span style="color:var(--text-muted)">Models ready:</span> <strong id="models-ready" style="color:var(--text-muted)">No</strong></div>
     </div>
   </div>
@@ -425,7 +394,7 @@
     <div style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
       <div style="background:#21262d;border:1px solid #bc8cff;border-radius:6px;padding:6px 10px;color:#bc8cff;font-weight:600">GEN</div>
       <div style="color:var(--text-muted)">→ NFS →</div>
-      <div style="background:#21262d;border:1px solid #bc8cff;border-radius:6px;padding:6px 10px;color:#bc8cff;font-weight:600">PREP GPU</div>
+      <div style="background:#21262d;border:1px solid #bc8cff;border-radius:6px;padding:6px 10px;color:#bc8cff;font-weight:600">PREP</div>
       <div style="color:var(--text-muted)">→ NFS →</div>
       <div style="background:#21262d;border:1px solid #3fb950;border-radius:6px;padding:6px 10px;color:#3fb950;font-weight:600">GraphSAGE</div>
       <div style="color:var(--text-muted)">→</div>
@@ -724,46 +693,41 @@ function updateDashboard(data) {
     catChart.update();
   }
 
-  // Pipeline stages (new continuous pipeline key names)
-  const prepGpu   = (data.pipeline || {}).prep_gpu    || {};
-  const prepCpu   = (data.pipeline || {}).prep_cpu    || {};
-  const scoreGpu  = (data.pipeline || {}).scoring_gpu || {};
-  const scoreCpu  = (data.pipeline || {}).scoring_cpu || {};
-  const train     = (data.pipeline || {}).train        || {};
+  // Pipeline stages
+  const prep      = (data.pipeline || {}).prep       || {};
+  const scoring   = (data.pipeline || {}).scoring    || {};
+  const train     = (data.pipeline || {}).train      || {};
 
-  // Dual-lane throughput funnel (GPU lane)
+  // Pipeline throughput funnel
   const genRps = gather.rows_per_sec || 0;
-  document.getElementById('lane-gpu-gen').textContent  = genRps ? fmtNum(genRps) + '/s' : '—';
-  const qRawGpu = ((data.queue || {}).raw_gpu || {}).pending || 0;
-  document.getElementById('lane-gpu-gen-q').textContent = qRawGpu ? `[${qRawGpu} pending]` : '';
+  document.getElementById('lane-gen').textContent  = genRps ? fmtNum(genRps) + '/s' : '—';
+  const qRaw = ((data.queue || {}).raw || {}).pending || 0;
+  document.getElementById('lane-gen-q').textContent = qRaw ? `[${qRaw} pending]` : '';
 
-  const gpuRows = prepGpu.rows || 0;
-  const gpuUsed = prepGpu.gpu_used;
-  const prepGpuEl = document.getElementById('lane-gpu-prep');
-  if (gpuRows) {
-    prepGpuEl.innerHTML = fmtNum(gpuRows) + ' rows' +
+  const prepRows = prep.rows || 0;
+  const gpuUsed = prep.gpu_used;
+  const prepEl = document.getElementById('lane-prep');
+  if (prepRows) {
+    prepEl.innerHTML = fmtNum(prepRows) + ' rows' +
       (gpuUsed === 0 ? ' <span style="font-size:10px;color:#f85149">(CPU fallback)</span>' : '');
-  } else { prepGpuEl.textContent = '—'; }
-  document.getElementById('lane-gpu-prep-sub').textContent =
-    prepGpu.speedup ? `${prepGpu.speedup?.toFixed(1)}x speedup` : '';
+  } else { prepEl.textContent = '—'; }
+  document.getElementById('lane-prep-sub').textContent =
+    prep.speedup ? `${prep.speedup?.toFixed(1)}x speedup` : '';
 
-  const scoreGpuRows = scoreGpu.rows || 0;
-  document.getElementById('lane-gpu-score').textContent = scoreGpuRows ? fmtNum(scoreGpuRows) + ' rows' : '—';
-  document.getElementById('lane-gpu-score-sub').textContent =
-    scoreGpu.latency_ms ? `${scoreGpu.latency_ms?.toFixed(1)}ms latency` : '';
+  // Model train status
+  const trainEl = document.getElementById('lane-train');
+  if (train.cycle) {
+    trainEl.textContent = 'Cycle ' + train.cycle;
+  } else if (train.f1_gpu) {
+    trainEl.textContent = 'Ready';
+  } else { trainEl.textContent = '—'; }
+  document.getElementById('lane-train-sub').textContent =
+    train.f1_gpu ? `F1: ${train.f1_gpu.toFixed(3)}` : '';
 
-  // CPU lane
-  document.getElementById('lane-cpu-gen').textContent  = genRps ? fmtNum(genRps) + '/s' : '—';
-  const qRawCpu = ((data.queue || {}).raw_cpu || {}).pending || 0;
-  document.getElementById('lane-cpu-gen-q').textContent = qRawCpu ? `[${qRawCpu} pending]` : '';
-  const cpuRows = prepCpu.rows || 0;
-  document.getElementById('lane-cpu-prep').textContent = cpuRows ? fmtNum(cpuRows) + ' rows' : '—';
-  document.getElementById('lane-cpu-prep-sub').textContent =
-    prepCpu.cpu_time_s ? `${prepCpu.cpu_time_s?.toFixed(2)}s/chunk` : '';
-  const scoreCpuRows = scoreCpu.rows || 0;
-  document.getElementById('lane-cpu-score').textContent = scoreCpuRows ? fmtNum(scoreCpuRows) + ' rows' : '—';
-  document.getElementById('lane-cpu-score-sub').textContent =
-    scoreCpu.latency_ms ? `${scoreCpu.latency_ms?.toFixed(1)}ms latency` : '';
+  const scoreRows = scoring.rows || 0;
+  document.getElementById('lane-score').textContent = scoreRows ? fmtNum(scoreRows) + ' rows' : '—';
+  document.getElementById('lane-score-sub').textContent =
+    scoring.latency_ms ? `${scoring.latency_ms?.toFixed(1)}ms latency` : '';
 
   // Queue depths (Tab 2)
   function fmtQueue(q) {
@@ -772,19 +736,17 @@ function updateDashboard(data) {
   }
   const queue = data.queue || {};
   const qEl = id => document.getElementById(id);
-  if (qEl('q-raw-gpu'))  qEl('q-raw-gpu').textContent  = fmtQueue(queue.raw_gpu);
-  if (qEl('q-raw-cpu'))  qEl('q-raw-cpu').textContent  = fmtQueue(queue.raw_cpu);
-  if (qEl('q-feat-gpu')) qEl('q-feat-gpu').textContent = fmtQueue(queue.features_gpu);
-  if (qEl('q-feat-cpu')) qEl('q-feat-cpu').textContent = fmtQueue(queue.features_cpu);
+  if (qEl('q-raw'))  qEl('q-raw').textContent  = fmtQueue(queue.raw);
+  if (qEl('q-feat')) qEl('q-feat').textContent = fmtQueue(queue.features);
 
   // Speedup table
   const rows = [];
-  if (prepGpu.cpu_time_s) {
+  if (prep.cpu_time_s) {
     rows.push(`<tr>
-      <td>Data Prep GPU</td>
-      <td>${prepGpu.cpu_time_s?.toFixed(2)}s</td>
-      <td>${prepGpu.gpu_time_s?.toFixed(2)}s</td>
-      <td><span class="speedup-badge">${prepGpu.speedup?.toFixed(1)}x</span></td>
+      <td>Data Prep</td>
+      <td>${prep.cpu_time_s?.toFixed(2)}s</td>
+      <td>${prep.gpu_time_s?.toFixed(2)}s</td>
+      <td><span class="speedup-badge">${prep.speedup?.toFixed(1)}x</span></td>
     </tr>`);
   }
   if (train.cpu_train_time_s) {
@@ -799,11 +761,9 @@ function updateDashboard(data) {
 
   // Storage
   const stor = data.storage || {};
-  document.getElementById('raw-files').textContent     = stor.raw_gpu_files || 0;
-  document.getElementById('raw-cpu-files').textContent = stor.raw_cpu_files || 0;
+  document.getElementById('raw-files').textContent     = stor.raw_files || 0;
   document.getElementById('raw-size').textContent      = (stor.raw_size_gb || 0).toFixed(2) + ' GB';
-  document.getElementById('feat-files').textContent    = stor.features_gpu_files || 0;
-  document.getElementById('feat-cpu-files').textContent = stor.features_cpu_files || 0;
+  document.getElementById('feat-files').textContent    = stor.features_files || 0;
   const mr = document.getElementById('models-ready');
   mr.textContent = stor.models_ready ? 'Yes' : 'No';
   mr.style.color = stor.models_ready ? 'var(--green)' : 'var(--text-muted)';
@@ -816,8 +776,8 @@ function updateDashboard(data) {
 
   // Flow stats (Tab 3)
   const flowEl = document.getElementById('flow-stats');
-  if (flowEl && scoreGpu.latency_ms) {
-    flowEl.textContent = `Latency: ${scoreGpu.latency_ms?.toFixed(1)}ms • fraud_rate: ${((scoreGpu.fraud_rate || 0) * 100).toFixed(2)}%`;
+  if (flowEl && scoring.latency_ms) {
+    flowEl.textContent = `Latency: ${scoring.latency_ms?.toFixed(1)}ms • fraud_rate: ${((scoring.fraud_rate || 0) * 100).toFixed(2)}%`;
   }
 
   // GNN model stats (Tab 3)
@@ -1151,13 +1111,13 @@ async function _ctlRunSteps(steps, doneTitle, doneSub, dismissLabel, onDismiss) 
 function _clearDashboard() {
   alertRows = [];
   document.getElementById('alerts-body').innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">Pipeline not running</td></tr>';
-  ['lane-gpu-gen','lane-gpu-prep','lane-gpu-score','lane-cpu-gen','lane-cpu-prep','lane-cpu-score'].forEach(id => {
+  ['lane-gen','lane-prep','lane-train','lane-score'].forEach(id => {
     const el = document.getElementById(id); if (el) el.textContent = '—';
   });
-  ['lane-gpu-gen-q','lane-gpu-prep-sub','lane-gpu-score-sub','lane-cpu-gen-q','lane-cpu-prep-sub','lane-cpu-score-sub'].forEach(id => {
+  ['lane-gen-q','lane-prep-sub','lane-train-sub','lane-score-sub'].forEach(id => {
     const el = document.getElementById(id); if (el) el.textContent = '';
   });
-  ['q-raw-gpu','q-raw-cpu','q-feat-gpu','q-feat-cpu'].forEach(id => {
+  ['q-raw','q-feat'].forEach(id => {
     const el = document.getElementById(id); if (el) el.textContent = '—';
   });
   document.getElementById('speedup-table').innerHTML = '';
@@ -1245,43 +1205,55 @@ async function resetPipeline() {
 
 async function toggleStress() {
   if (stressActive) {
-    // Stop stress — scale data-prep-cpu, scoring-gpu, scoring-cpu back to 1
-    const PODS = ['data-prep-cpu', 'scoring-gpu', 'scoring-cpu'];
-    const LABELS = { 'data-prep-cpu': 'Prep CPU → ×1', 'scoring-gpu': 'Score GPU → ×1', 'scoring-cpu': 'Score CPU → ×1' };
-    _ctlShow('🔄 Returning to Normal Mode…', 'Scaling down to standard replica counts');
+    // Stop stress — resume model-train, scale back to normal replicas
+    _ctlShow('🔄 Returning to Normal Mode…', 'Resuming model-train, scaling down to standard replica counts');
     const steps = [
       {
         label:  'Restoring normal config',
         action: () => fetch('/api/control/stress-stop', { method: 'POST' }),
       },
-      ...PODS.map(key => ({
-        label: LABELS[key],
-        check: async () => {
+      { label: 'Model Train → resumed', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
-          const desired = ((d.replicas || {})[key] || {}).desired;
-          return (d.services || {})[key] === 'Ready' && desired === 1;
-        },
-      })),
+          return (d.services || {})['model-train'] === 'Ready';
+        }},
+      { label: 'Data Gather → x1', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return ((d.replicas || {})['data-gather'] || {}).desired === 1;
+        }},
+      { label: 'Data Prep → x1', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return ((d.replicas || {})['data-prep'] || {}).desired === 1;
+        }},
+      { label: 'Scoring → x1', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return ((d.replicas || {})['scoring'] || {}).desired === 1;
+        }},
     ];
     await _ctlRunSteps(steps, '🔄 Normal Mode', 'Pipeline running at standard throughput.', null, null);
   } else {
-    // Start stress — scale data-prep-cpu, scoring-gpu, scoring-cpu to 2
-    const PODS = ['data-prep-cpu', 'scoring-gpu', 'scoring-cpu'];
-    const LABELS = { 'data-prep-cpu': 'Prep CPU → ×2', 'scoring-gpu': 'Score GPU → ×2', 'scoring-cpu': 'Score CPU → ×2' };
-    _ctlShow('⚡ Activating Stress Mode…', 'Scaling up for maximum throughput');
+    // Start stress — pause model-train, scale up gather/prep/scoring
+    _ctlShow('⚡ Activating Stress Mode…', 'Pausing model-train, scaling data-gather to 4, data-prep to 2, scoring to 2');
     const steps = [
       {
         label:  'Activating high-throughput config',
         action: () => fetch('/api/control/stress', { method: 'POST' }),
       },
-      ...PODS.map(key => ({
-        label: LABELS[key],
-        check: async () => {
+      { label: 'Model Train → paused', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
-          const desired = ((d.replicas || {})[key] || {}).desired;
-          return (d.services || {})[key] === 'Ready' && desired === 2;
-        },
-      })),
+          return ['Stopped','NotFound'].includes((d.services || {})['model-train']);
+        }},
+      { label: 'Data Gather → x4', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return ((d.replicas || {})['data-gather'] || {}).desired === 4;
+        }},
+      { label: 'Data Prep → x2', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return ((d.replicas || {})['data-prep'] || {}).desired === 2;
+        }},
+      { label: 'Scoring → x2', check: async () => {
+          const d = await fetch('/api/status').then(r => r.json());
+          return ((d.replicas || {})['scoring'] || {}).desired === 2;
+        }},
     ];
     await _ctlRunSteps(steps, '⚡ Stress Mode Active', 'Pipeline running at maximum throughput.', null, null);
   }
@@ -1292,11 +1264,10 @@ async function toggleStress() {
 // ---------------------------------------------------------------------------
 const SERVICE_LABELS = {
   'data-gather':   'Generate',
-  'data-prep-gpu': 'Prep GPU',
-  'data-prep-cpu': 'Prep CPU',
+  'data-prep':     'Data Prep',
+  'model-train':   'Model Train',
   'triton':        'Triton',
-  'scoring-gpu':   'Score GPU',
-  'scoring-cpu':   'Score CPU',
+  'scoring':       'Scoring',
 };
 
 let podPollInterval = null;

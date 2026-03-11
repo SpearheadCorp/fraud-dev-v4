@@ -1,7 +1,7 @@
 """
-Pipeline control: Deployment scaling for continuous pipeline stages.
-All pipeline stages are scaled by start/stop/stress. model-build remains
-a Job but is run manually (offline, pre-demo).
+Pipeline control (v4): Deployment scaling for continuous pipeline stages.
+Normal mode: 5 pods (gather, prep, triton, scoring, model-train).
+Stress mode: model-train pauses (0 replicas), prep scales to 2, scoring to 2, gather to 4.
 """
 import logging
 import os
@@ -17,20 +17,18 @@ NAMESPACE = os.environ.get("K8S_NAMESPACE", "fraud-det-v31")
 
 NORMAL_REPLICAS = {
     "data-gather":   1,
-    "data-prep-gpu": 1,
-    "data-prep-cpu": 1,
-    "scoring-gpu":   1,
-    "scoring-cpu":   1,
+    "data-prep":     1,
     "triton":        1,
+    "scoring":       1,
+    "model-train":   1,
 }
 
 STRESS_REPLICAS = {
-    "data-gather":   1,
-    "data-prep-gpu": 1,   # can't exceed 1 GPU (other L40S held by triton)
-    "data-prep-cpu": 2,
-    "scoring-gpu":   2,
-    "scoring-cpu":   2,
+    "data-gather":   4,
+    "data-prep":     2,   # 2nd replica uses freed GPU on node .40
     "triton":        1,
+    "scoring":       2,
+    "model-train":   0,   # paused during stress — frees GPU for prep replica
 }
 
 
