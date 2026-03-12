@@ -115,7 +115,7 @@ spec:
             - name: RUN_MODE
               value: continuous
             - name: CHUNK_SIZE
-              value: "10000000"
+              value: "5000000"
             - name: TARGET_ROWS_PER_SEC
               value: "0"
             - name: KAGGLE_SEED_PATH
@@ -123,7 +123,7 @@ spec:
             - name: CUPY_DEFAULT_MEMORY_POOL
               value: "none"
             - name: RMM_ALLOCATOR
-              value: "cuda"
+              value: "managed"
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
