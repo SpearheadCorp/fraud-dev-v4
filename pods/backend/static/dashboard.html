@@ -1317,10 +1317,6 @@ async function toggleStress() {
           const d = await fetch('/api/status').then(r => r.json());
           return ((d.replicas || {})['scoring'] || {}).desired === 2;
         }},
-      { label: 'Model Train → running', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return (d.services || {})['model-train'] === 'Ready';
-        }},
     ];
     await _ctlRunSteps(steps, '🔄 Normal Mode', 'Pipeline running at standard throughput.', null, null);
   } else {
@@ -1334,10 +1330,6 @@ async function toggleStress() {
       { label: 'Scoring → x4', check: async () => {
           const d = await fetch('/api/status').then(r => r.json());
           return ((d.replicas || {})['scoring'] || {}).desired === 4;
-        }},
-      { label: 'Model Train → running', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return (d.services || {})['model-train'] === 'Ready';
         }},
     ];
     await _ctlRunSteps(steps, '⚡ Stress Mode Active', 'All 4 GPUs active, scoring at maximum throughput.', null, null);
