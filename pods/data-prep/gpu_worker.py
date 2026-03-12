@@ -1,10 +1,10 @@
 """
-GPU feature engineering worker for data-prep-gpu.
+GPU feature engineering worker for data-prep (v4 — mega-batch).
 
-128-pipe concurrent processing: each file is an independent pipeline (thread)
-that reads from NFS → GPU feature eng → writes to NFS. cudf releases the GIL
-during GPU kernels, so while some pipes wait on NFS I/O, others keep the GPU
-busy. This overlaps I/O and compute, sustaining high GPU utilization.
+Mega-batch processing: reads ALL files in a batch into a single cuDF
+dataframe, runs feature engineering ONCE on the combined data (100M+ rows),
+then writes one consolidated output. This fills L40S SMs with a single
+large kernel launch instead of many tiny per-file launches.
 
 Protocol (via multiprocessing.Queue):
   req_q receives: list of (proc_path: str, out_path: str, tmp_path: str) tuples
@@ -17,8 +17,6 @@ import logging
 import os
 import sys
 import time
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -31,13 +29,7 @@ logging.basicConfig(
     force=True,
 )
 
-# Number of concurrent processing pipelines (threads).
-# Each pipe independently: NFS read → GPU feature eng → NFS write.
-# GPU stays busy because cudf releases GIL — while some pipes do I/O,
-# others run GPU kernels.
-_PIPES = int(os.environ.get("GPU_PIPES", "128"))
-
-# ── Constants (duplicated from prepare.py for subprocess isolation) ─────────
+# ── Constants ────────────────────────────────────────────────────────────────
 ALL_CATEGORIES = [
     "misc_net", "grocery_pos", "entertainment", "gas_transport", "misc_pos",
     "grocery_net", "shopping_net", "shopping_pos", "food_dining", "personal_care",
@@ -74,40 +66,23 @@ _OUTPUT_COLS = FEATURE_COLS + ["cc_num", "merchant", "trans_num", "category", "c
 
 _REQUIRED_COLS = ["amt", "lat", "long", "merch_lat", "merch_long", "unix_time", "is_fraud"]
 
-# Thread-safe counter for logging progress.
-_completed = 0
-_completed_lock = threading.Lock()
 
+# ── Feature engineering (runs on one big concatenated dataframe) ─────────────
 
-def _process_one_file(proc_path, out_path, tmp_path, cudf):
-    """Process a single file end-to-end: NFS read → GPU features → NFS write.
+def _engineer_features(gdf, cudf):
+    """Run all feature engineering on a single (potentially huge) cuDF dataframe.
 
-    Each call is one 'pipe'. Multiple pipes run concurrently via ThreadPoolExecutor.
-    cudf releases the GIL during GPU kernels, allowing true overlap of I/O and compute.
+    With 100M+ rows the sort/groupby/merge kernels actually fill the L40S SMs,
+    unlike per-file processing where each 5M-row kernel finishes instantly.
     """
-    global _completed
-
-    # ── Read directly to GPU ──
-    try:
-        gdf = cudf.read_parquet(proc_path)
-    except Exception as exc:
-        logging.warning("pipe: skipping %s: %s", proc_path, exc)
-        Path(proc_path).rename(proc_path.replace(".processing", ".done"))
-        return 0
-    if len(gdf) == 0:
-        Path(proc_path).rename(proc_path.replace(".processing", ".done"))
-        return 0
-
     # ── Clean ──
     gdf["merch_zipcode"] = gdf["merch_zipcode"].fillna(0.0)
     gdf["category"] = gdf["category"].fillna("misc_net")
     gdf["state"] = gdf["state"].fillna("CA")
     gdf["gender"] = gdf["gender"].fillna("F")
     gdf = gdf.dropna(subset=_REQUIRED_COLS)
-    n_rows = len(gdf)
-    if n_rows == 0:
-        Path(proc_path).rename(proc_path.replace(".processing", ".done"))
-        return 0
+    if len(gdf) == 0:
+        return gdf
 
     # ── Categorical encoding ──
     gdf["category_encoded"] = gdf["category"].map(CATEGORY_MAP).fillna(0).astype("int8")
@@ -186,60 +161,109 @@ def _process_one_file(proc_path, out_path, tmp_path, cudf):
     gdf["amt_rank"] = gdf["amt"].rank(pct=True)
     gdf["distance_rank"] = gdf["distance_km"].rank(pct=True)
 
-    # ── Write output (GPU→Arrow→NFS) ──
-    out_cols = [c for c in _OUTPUT_COLS if c in gdf.columns]
-    arrow_out = gdf[out_cols].to_arrow()
-    del gdf
-    pq.write_table(arrow_out, str(tmp_path))
-    del arrow_out
-    Path(tmp_path).rename(out_path)
-    Path(proc_path).rename(proc_path.replace(".processing", ".done"))
-
-    with _completed_lock:
-        _completed += 1
-
-    return n_rows
+    return gdf
 
 
-def _process_batch(file_list: list, cudf) -> tuple:
-    """Launch concurrent pipes — each file processed independently on GPU.
+# ── Mega-batch: concat all files, process once, write one output ─────────────
 
-    128 pipes overlap NFS I/O with GPU compute: while some threads read/write,
-    others run cudf sort/groupby/merge kernels. GPU stays busy continuously.
+def _process_mega_batch(file_list: list, cudf) -> tuple:
+    """Concat all files into one dataframe, run features once, write one output.
+
+    This is the key change from v3: instead of 128 threads processing 5M rows
+    each (GPU idle between launches), we process 100M+ rows in a single kernel
+    launch that actually fills the L40S streaming multiprocessors.
     """
-    global _completed
-    _completed = 0
-    n_pipes = min(len(file_list), _PIPES)
     t0 = time.perf_counter()
 
-    logging.info("launching %d concurrent pipes for %d files", n_pipes, len(file_list))
-
-    total_rows = 0
-    with ThreadPoolExecutor(max_workers=n_pipes) as pool:
-        futures = {
-            pool.submit(_process_one_file, proc, out, tmp, cudf): (proc, out, tmp)
-            for proc, out, tmp in file_list
-        }
-        for future in as_completed(futures):
+    # ── Read all files into GPU memory ──
+    t_read_start = time.perf_counter()
+    frames = []
+    valid_files = []
+    for proc_path, out_path, tmp_path in file_list:
+        try:
+            gdf = cudf.read_parquet(proc_path)
+            if len(gdf) > 0:
+                frames.append(gdf)
+                valid_files.append((proc_path, out_path, tmp_path))
+            else:
+                Path(proc_path).rename(proc_path.replace(".processing", ".done"))
+        except Exception as exc:
+            logging.warning("mega-batch: skipping %s: %s", proc_path, exc)
             try:
-                n = future.result()
-                total_rows += n
-            except Exception as exc:
-                proc, _, _ = futures[future]
-                logging.error("pipe error on %s: %s", proc, exc)
-                try:
-                    Path(proc).rename(proc.replace(".processing", ".done"))
-                except OSError:
-                    pass
+                Path(proc_path).rename(proc_path.replace(".processing", ".done"))
+            except OSError:
+                pass
+
+    if not frames:
+        # Mark remaining files done
+        for proc_path, _, _ in file_list:
+            try:
+                Path(proc_path).rename(proc_path.replace(".processing", ".done"))
+            except OSError:
+                pass
+        return 0, {"total": time.perf_counter() - t0, "read": 0, "features": 0, "write": 0}
+
+    # Concat into one mega-dataframe
+    if len(frames) == 1:
+        mega = frames[0]
+    else:
+        mega = cudf.concat(frames, ignore_index=True)
+    del frames
+    t_read = time.perf_counter() - t_read_start
+    n_rows = len(mega)
+    logging.info("mega-batch: loaded %d files, %d rows (%.1fs read)",
+                 len(valid_files), n_rows, t_read)
+
+    # ── Feature engineering on the full mega-dataframe ──
+    t_feat_start = time.perf_counter()
+    mega = _engineer_features(mega, cudf)
+    t_feat = time.perf_counter() - t_feat_start
+    n_rows = len(mega)
+    logging.info("mega-batch: features done — %d rows (%.1fs gpu)", n_rows, t_feat)
+
+    # ── Write one consolidated output file ──
+    t_write_start = time.perf_counter()
+    # Use first file's output path but with mega_ prefix for uniqueness
+    _, first_out, first_tmp = valid_files[0]
+    out_dir = Path(first_out).parent
+    # Generate a unique name based on the first and last file in the batch
+    first_stem = Path(valid_files[0][0]).stem.replace(".processing", "")
+    last_stem = Path(valid_files[-1][0]).stem.replace(".processing", "")
+    mega_out = out_dir / f"features_mega_{first_stem}_to_{last_stem}.parquet"
+    mega_tmp = mega_out.with_suffix(".parquet.tmp")
+
+    out_cols = [c for c in _OUTPUT_COLS if c in mega.columns]
+    arrow_out = mega[out_cols].to_arrow()
+    del mega
+    pq.write_table(arrow_out, str(mega_tmp))
+    del arrow_out
+    Path(mega_tmp).rename(mega_out)
+    t_write = time.perf_counter() - t_write_start
+
+    # ── Mark all input files done ──
+    for proc_path, _, _ in valid_files:
+        try:
+            Path(proc_path).rename(proc_path.replace(".processing", ".done"))
+        except OSError:
+            pass
 
     elapsed = time.perf_counter() - t0
-    logging.info("ALL PIPES DONE — %d files, %d rows, %.2fs (%.0f files/s, %.0f rows/s)",
-                 len(file_list), total_rows, elapsed,
-                 len(file_list) / max(elapsed, 0.001),
-                 total_rows / max(elapsed, 0.001))
+    logging.info("mega-batch: DONE — %d files, %d rows, %.1fs total "
+                 "(read=%.1fs feat=%.1fs write=%.1fs, %.0f rows/s)",
+                 len(valid_files), n_rows, elapsed,
+                 t_read, t_feat, t_write,
+                 n_rows / max(elapsed, 0.001))
 
-    return total_rows, {"total": elapsed, "pipes": n_pipes}
+    return n_rows, {
+        "total": elapsed,
+        "read": t_read,
+        "features": t_feat,
+        "write": t_write,
+        "files": len(valid_files),
+    }
 
+
+# ── GPU worker loop ──────────────────────────────────────────────────────────
 
 def run_gpu_loop(req_q, res_q) -> None:
     """
@@ -251,8 +275,8 @@ def run_gpu_loop(req_q, res_q) -> None:
     import pandas as pd
     faulthandler.enable(file=_sys.stderr, all_threads=True)
     import cudf  # deferred — CUDA only initialised in this fresh process
-    logging.info("GPU worker: cudf %s, CUDA device %d, pipes=%d",
-                 cudf.__version__, 0, _PIPES)
+    logging.info("GPU worker: cudf %s, CUDA device %d (mega-batch mode)",
+                 cudf.__version__, 0)
     # Warm-up: force CUDA context + libcudf init before signalling ready.
     pd.DataFrame({"_x": [1.0]}).to_parquet("/tmp/_warmup.parquet")
     _warmup = cudf.read_parquet("/tmp/_warmup.parquet")
@@ -265,7 +289,8 @@ def run_gpu_loop(req_q, res_q) -> None:
         if msg is None:  # shutdown signal
             break
         try:
-            n_rows, timing = _process_batch(msg, cudf)
+            n_rows, timing = _process_mega_batch(msg, cudf)
             res_q.put(("ok", n_rows, timing))
         except Exception as exc:
+            logging.exception("mega-batch error")
             res_q.put(("error", str(exc), {}))

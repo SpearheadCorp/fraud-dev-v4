@@ -1,11 +1,12 @@
 """
-Pod: data-prep (v4)
+Pod: data-prep (v4 — mega-batch)
 Continuous file-queue worker. Atomically claims raw parquet chunks from INPUT_PATH,
-engineers 21 features (GPU via cuDF), writes to OUTPUT_PATH.
-Multiple replicas race-safely share the queue via POSIX rename atomicity.
+concatenates them into one mega-dataframe, engineers features (GPU via cuDF) in a
+single large kernel launch, writes consolidated output to OUTPUT_PATH.
 
-GPU worker owns the full file lifecycle: reads raw file, does GPU feature engineering,
-writes output to NFS, marks input done. Queue carries only path strings + timing dicts.
+Mega-batch approach: instead of 128 threads each processing one 5M-row file (GPU
+idle between tiny kernels), we concat 20+ files into 100M+ rows and process once.
+This fills L40S SMs with meaningful work per kernel launch.
 """
 import os
 import sys
@@ -41,13 +42,15 @@ signal.signal(signal.SIGINT, _handle_signal)
 # ---------------------------------------------------------------------------
 INPUT_PATH = Path(os.environ.get("INPUT_PATH", "/data/raw"))
 OUTPUT_PATH = Path(os.environ.get("OUTPUT_PATH", "/data/features"))
-BATCH_FILES = int(os.environ.get("BATCH_FILES", "128"))
+BATCH_FILES = int(os.environ.get("BATCH_FILES", "20"))
 
 # ---------------------------------------------------------------------------
-# Persistent GPU worker subprocess
+# Persistent GPU worker subprocess — mega-batch mode
 # The main process NEVER imports cudf/cupy — any CUDA in the parent
 # corrupts numba_cuda's context for subsequent use. All GPU work runs in
 # a long-lived child (fork mode = fresh CUDA state, no __main__ reimport).
+# GPU worker concats all files in a batch into one mega-dataframe and
+# processes features in a single large kernel launch.
 # ---------------------------------------------------------------------------
 _gpu_worker_proc: "mp.Process | None" = None
 _gpu_req_q: "mp.Queue | None" = None

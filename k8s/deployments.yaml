@@ -142,7 +142,7 @@ spec:
             claimName: raw-data-pvc
 
 ---
-# ── data-prep (GPU — RAPIDS/cuDF feature engineering) ─────────────────────────
+# ── data-prep (GPU — RAPIDS/cuDF mega-batch feature engineering) ─────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -171,6 +171,8 @@ spec:
               value: /data/raw
             - name: OUTPUT_PATH
               value: /data/features
+            - name: BATCH_FILES
+              value: "20"
             - name: CUDF_SPILL
               value: "1"
             - name: NUMBA_CACHE_DIR
@@ -185,10 +187,10 @@ spec:
               nvidia.com/gpu: "1"
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
-            initialDelaySeconds: 60
-            periodSeconds: 15
-            failureThreshold: 2
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            failureThreshold: 3
       volumes:
         - name: raw-data
           persistentVolumeClaim:
