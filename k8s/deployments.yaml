@@ -115,7 +115,7 @@ spec:
             - name: RUN_MODE
               value: continuous
             - name: CHUNK_SIZE
-              value: "1000000"
+              value: "10000000"
             - name: TARGET_ROWS_PER_SEC
               value: "0"
             - name: KAGGLE_SEED_PATH
