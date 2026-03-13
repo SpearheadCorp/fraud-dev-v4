@@ -378,7 +378,7 @@ class MetricsCollector:
                     gpu_id = result.get("metric", {}).get("gpu", "0")
                     hostname = result.get("metric", {}).get("Hostname", "unknown")
                     # Shorten hostname: slc6-lg-n3-b30-29 -> n29, slc6-lg-n3-b30-25 -> n25
-                    short = hostname.split("-")[-1] if "-" in hostname else hostname
+                    short = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
                     key = key_prefix.format(host=short, gpu=gpu_id)
                     metrics[key] = float(result["value"][1]) * scale
             return metrics if metrics else self._gpu_zeros()
