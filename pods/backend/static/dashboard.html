@@ -1290,16 +1290,16 @@ async function stopPipeline() {
 async function resetPipeline() {
   const ok = await _ctlConfirm(
     '↺ Reset Pipeline?',
-    'This will stop all pods and delete raw, feature and score data. Models are preserved.',
+    'This will stop all pods, re-queue raw data for reprocessing, and clear features/scores. Models are preserved.',
     '↺ Confirm Reset'
   );
   if (!ok) return;
-  _ctlShow('↺ Resetting Pipeline…', 'Stopping pods and clearing all data');
+  _ctlShow('↺ Resetting Pipeline…', 'Stopping pods and re-queuing raw data');
   const pods = Object.entries(SERVICE_LABELS);
   const steps = [
     {
-      label:  'Stopping pipeline pods',
-      action: () => fetch('/api/control/stop', { method: 'POST' }),
+      label:  'Stopping pipeline and re-queuing raw data',
+      action: () => fetch('/api/control/reset', { method: 'POST' }),
       check:  async () => {
         const d = await fetch('/api/status').then(r => r.json());
         _ctlRenderPods(d.services || {}, pods, 'down');
@@ -1307,15 +1307,11 @@ async function resetPipeline() {
       },
     },
     {
-      label:  'Deleting raw, feature and score data',
-      action: () => fetch('/api/control/clear-data', { method: 'POST' }),
-    },
-    {
       label:  'Clearing dashboard',
       action: async () => _clearDashboard(),
     },
   ];
-  await _ctlRunSteps(steps, '↺ Reset Complete', 'All data cleared. Ready for a fresh run.', null, null);
+  await _ctlRunSteps(steps, '↺ Reset Complete', 'Raw data re-queued. Ready for a fresh run.', null, null);
 }
 
 async function toggleStress() {

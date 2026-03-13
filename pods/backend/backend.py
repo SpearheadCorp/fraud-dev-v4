@@ -118,20 +118,6 @@ async def reset_pipeline():
     return result
 
 
-@app.post("/api/control/clear-data")
-async def clear_data():
-    """Delete data files only — call after pods are already stopped."""
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None, lambda: pl.clear_data_files(
-            RAW_PATH, FEATURES_PATH, SCORES_PATH,
-        )
-    )
-    telemetry_file = MODEL_REPO_PATH / "last_telemetry.json"
-    telemetry_file.unlink(missing_ok=True)
-    state.reset()
-    return result
-
 
 @app.post("/api/control/stress")
 async def start_stress():
