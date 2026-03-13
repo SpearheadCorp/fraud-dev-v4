@@ -229,24 +229,43 @@ def _process_mega_batch(file_list: list, cudf) -> tuple:
     t_arrow = time.perf_counter() - t_arrow_start
     logging.info("mega-batch: arrow conversion done (%.1fs), GPU free for next batch", t_arrow)
 
-    # ── Write to NFS in background thread (GPU is free now) ──
+    # ── Write to NFS with parallel pipes (background, GPU is free) ──
     _, first_out, _ = valid_files[0]
     out_dir = Path(first_out).parent
-    first_stem = Path(valid_files[0][0]).stem.replace(".processing", "")
-    last_stem = Path(valid_files[-1][0]).stem.replace(".processing", "")
-    mega_out = out_dir / f"features_mega_{first_stem}_to_{last_stem}.parquet"
-    mega_tmp = mega_out.with_suffix(".parquet.tmp")
+    batch_id = Path(valid_files[0][0]).stem.replace(".processing", "")
+    n_write_pipes = int(os.environ.get("WRITE_PIPES", "32"))
+
+    # Split arrow table into chunks for parallel NFS writes
+    total = len(arrow_out)
+    chunk_size = max(1, total // n_write_pipes)
+    chunks = []
+    for i in range(0, total, chunk_size):
+        chunks.append(arrow_out.slice(i, min(chunk_size, total - i)))
+
+    def _write_chunk(idx, chunk):
+        out_path = out_dir / f"features_{batch_id}_part{idx:03d}.parquet"
+        tmp_path = out_path.with_suffix(".parquet.tmp")
+        pq.write_table(chunk, str(tmp_path))
+        Path(tmp_path).rename(out_path)
 
     def _bg_write():
         t_w0 = time.perf_counter()
-        pq.write_table(arrow_out, str(mega_tmp))
-        Path(mega_tmp).rename(mega_out)
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=n_write_pipes) as pool:
+            futs = {pool.submit(_write_chunk, i, c): i for i, c in enumerate(chunks)}
+            for f in as_completed(futs):
+                try:
+                    f.result()
+                except Exception as exc:
+                    logging.error("write pipe %d failed: %s", futs[f], exc)
+        # Mark all input files done after all chunks written
         for proc_path, _, _ in valid_files:
             try:
                 Path(proc_path).rename(proc_path.replace(".processing", ".done"))
             except OSError:
                 pass
-        logging.info("mega-batch: NFS write done (%.1fs)", time.perf_counter() - t_w0)
+        logging.info("mega-batch: NFS write done — %d pipes, %.1fs",
+                     len(chunks), time.perf_counter() - t_w0)
 
     import threading
     write_thread = threading.Thread(target=_bg_write, daemon=True)
