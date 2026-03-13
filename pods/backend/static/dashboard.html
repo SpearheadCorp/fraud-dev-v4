@@ -50,8 +50,6 @@
   .btn-danger:hover { filter: brightness(1.1); }
   .btn-secondary { background: var(--surface); color: var(--text); }
   .btn-secondary:hover { background: #21262d; }
-  .btn-stress { background: #e3b341; color: #000; border-color: #e3b341; }
-  .btn-stress:hover { filter: brightness(1.1); }
   button:disabled { opacity: 0.35; cursor: not-allowed; filter: none !important; }
 
   /* Pod startup modal */
@@ -96,14 +94,6 @@
   #pod-modal-cancel:hover { opacity: 0.7; }
   #pod-modal-btn-row { display: flex; flex-direction: column; gap: 0; }
 
-  /* Stress banner */
-  #stress-banner {
-    display: none; background: rgba(227,179,65,0.15); border-bottom: 2px solid var(--orange);
-    text-align: center; padding: 8px; font-weight: 700; font-size: 14px; color: var(--orange);
-    animation: flashBorder 0.8s infinite alternate;
-  }
-  @keyframes flashBorder { from { border-color: var(--orange); } to { border-color: transparent; } }
-
   /* Tabs */
   .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; background: var(--surface); }
   .tab-btn {
@@ -141,18 +131,6 @@
   .chart-title { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
   .chart-container { position: relative; }
 
-  /* Pipeline status */
-  .pipeline-stages {
-    display: flex; gap: 0; align-items: center; margin-bottom: 20px;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;
-  }
-  .stage {
-    flex: 1; text-align: center;
-  }
-  .stage-name { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
-  .stage-value { font-size: 13px; font-weight: 500; color: var(--text); }
-  .stage-arrow { color: var(--border); font-size: 18px; padding: 0 4px; }
-
   /* Speedup table */
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); }
@@ -177,14 +155,10 @@
 
   @media (max-width: 640px) {
     .chart-grid { grid-template-columns: 1fr; }
-    .pipeline-stages { flex-direction: column; gap: 8px; }
-    .stage-arrow { display: none; }
   }
 </style>
 </head>
 <body>
-
-<div id="stress-banner">⚡ STRESS MODE ACTIVE — Accelerated workload in progress</div>
 
 <header>
   <h1>Fraud Detection Demo v4 — GNN + XGBoost</h1>
@@ -194,7 +168,6 @@
   <div class="header-right">
     <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
     <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
-    <button class="btn-stress" id="stress-btn" onclick="toggleStress()">⚡ Stress</button>
     <button class="btn-secondary" id="reset-btn" onclick="resetPipeline()">↺ Reset</button>
   </div>
 </header>
@@ -202,11 +175,11 @@
 <div id="pod-modal-backdrop">
   <div id="pod-modal">
     <button id="pod-modal-close-x" onclick="hidePodModal()" title="Close">&times;</button>
-    <h2 id="pod-modal-title">🚀 Starting Pipeline…</h2>
-    <p class="pod-modal-sub" id="pod-modal-sub">Pods are scaling up — takes 20–60 s on first start</p>
+    <h2 id="pod-modal-title">Starting Pipeline...</h2>
+    <p class="pod-modal-sub" id="pod-modal-sub">Pods are scaling up — takes 20-60 s on first start</p>
     <div id="pod-modal-chips"></div>
     <div id="pod-modal-btn-row">
-      <button id="pod-modal-dismiss" onclick="hidePodModal()">✓ All Ready — Dismiss</button>
+      <button id="pod-modal-dismiss" onclick="hidePodModal()">All Ready — Dismiss</button>
       <button id="pod-modal-cancel">Cancel</button>
     </div>
   </div>
@@ -234,41 +207,12 @@
     <div class="kpi-card">
       <div class="kpi-label">Fraud Flagged</div>
       <div class="kpi-value" id="kpi-flagged">0</div>
-      <div class="kpi-sub" id="kpi-fraud-pct">0.00% rate</div>
+      <div class="kpi-sub">detected by model</div>
     </div>
     <div class="kpi-card good">
-      <div class="kpi-label">Annual Savings</div>
-      <div class="kpi-value" id="kpi-savings">$0</div>
-      <div class="kpi-sub">projected</div>
-    </div>
-  </div>
-
-  <div class="chart-card" style="margin-bottom:0">
-    <div class="chart-title">Live Pipeline Throughput</div>
-    <div style="display:flex;gap:0;align-items:stretch;font-size:12px">
-      <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
-        <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">Generate</div>
-        <div style="font-size:15px;font-weight:700;color:#e6edf3" id="lane-gen">—</div>
-        <div style="font-size:10px;color:var(--text-muted)" id="lane-gen-q"></div>
-      </div>
-      <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
-      <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
-        <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">Data Prep</div>
-        <div style="font-size:15px;font-weight:700;color:#bc8cff" id="lane-prep">—</div>
-        <div style="font-size:10px;color:var(--text-muted)" id="lane-prep-sub"></div>
-      </div>
-      <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
-      <div style="flex:1;text-align:center;padding:8px 6px;border-right:1px solid var(--border)">
-        <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">Model Train</div>
-        <div style="font-size:15px;font-weight:700;color:#e3b341" id="lane-train">—</div>
-        <div style="font-size:10px;color:var(--text-muted)" id="lane-train-sub"></div>
-      </div>
-      <div style="padding:8px 4px;color:var(--border);display:flex;align-items:center">→</div>
-      <div style="flex:1;text-align:center;padding:8px 6px">
-        <div style="color:var(--text-muted);font-size:10px;margin-bottom:3px">Scoring</div>
-        <div style="font-size:15px;font-weight:700;color:#3fb950" id="lane-score">—</div>
-        <div style="font-size:10px;color:var(--text-muted)" id="lane-score-sub"></div>
-      </div>
+      <div class="kpi-label">Fraud Rate</div>
+      <div class="kpi-value" id="kpi-fraud-rate">0%</div>
+      <div class="kpi-sub">of transactions</div>
     </div>
   </div>
 
@@ -282,11 +226,7 @@
       <div class="chart-container" style="height:220px"><canvas id="cat-chart"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">Throughput MB/s</div>
-      <div class="chart-container" style="height:220px"><canvas id="tput-chart"></canvas></div>
-    </div>
-    <div class="chart-card full-width">
-      <div class="chart-title">Recent High-Risk Alerts (fraud_score &gt; 0.8 — live scored)</div>
+      <div class="chart-title">Recent High-Risk Alerts (fraud_score &gt; 0.8)</div>
       <table class="alerts-table">
         <thead>
           <tr><th>#</th><th>Merchant</th><th>Category</th><th>Amount</th><th>Fraud Score</th></tr>
@@ -337,30 +277,6 @@
       <div class="kpi-value" id="kpi-ram">0%</div>
       <div class="kpi-sub" id="kpi-ram-sub">0 GB used</div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Workers</div>
-      <div class="kpi-value" id="kpi-workers">—</div>
-      <div class="kpi-sub">data-gather</div>
-    </div>
-    <div class="kpi-card highlight">
-      <div class="kpi-label">NFS Storage</div>
-      <div class="kpi-value" id="kpi-storage">0 GB</div>
-      <div class="kpi-sub" id="kpi-storage-sub">raw 0 | feat 0 | scores 0</div>
-    </div>
-  </div>
-
-  <div class="chart-card" style="margin-bottom:16px">
-    <div class="chart-title">NFS File Queue Depth</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
-      <div>
-        <div style="color:#bc8cff;font-weight:600;margin-bottom:4px">raw</div>
-        <div id="q-raw" style="color:var(--text-muted)">—</div>
-      </div>
-      <div>
-        <div style="color:#3fb950;font-weight:600;margin-bottom:4px">features</div>
-        <div id="q-feat" style="color:var(--text-muted)">—</div>
-      </div>
-    </div>
   </div>
 
   <div class="chart-grid">
@@ -380,7 +296,7 @@
       </div>
       <div class="chart-container" style="height:220px"><canvas id="util-chart"></canvas></div>
     </div>
-    <!-- Chart 2: Throughput & Latency -->
+    <!-- Chart 2: Processing Throughput & Latency -->
     <div class="chart-card full-width">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="chart-title" style="margin:0">Processing Throughput &amp; Latency</div>
@@ -391,24 +307,20 @@
       </div>
       <div class="chart-container" style="height:180px"><canvas id="tput-lat-chart"></canvas></div>
     </div>
-    <div class="chart-card full-width">
-      <div class="chart-title">CPU vs GPU Speedup</div>
-      <table>
-        <thead><tr><th>Stage</th><th>CPU Time</th><th>GPU Time</th><th>Speedup</th></tr></thead>
-        <tbody id="speedup-table">
-          <tr><td colspan="4" style="color:var(--text-muted)">Pipeline not complete yet</td></tr>
-        </tbody>
-      </table>
-    </div>
   </div>
 
-  <div class="chart-card" style="margin-top:0">
-    <div class="chart-title">Storage</div>
-    <div style="display:flex;gap:24px;flex-wrap:wrap">
-      <div><span style="color:var(--text-muted)">Raw files:</span> <strong id="raw-files">0</strong></div>
-      <div><span style="color:var(--text-muted)">Raw size:</span> <strong id="raw-size">0 GB</strong></div>
-      <div><span style="color:var(--text-muted)">Feature files:</span> <strong id="feat-files">0</strong></div>
-      <div><span style="color:var(--text-muted)">Models ready:</span> <strong id="models-ready" style="color:var(--text-muted)">No</strong></div>
+  <!-- NFS File Queue Depth (bottom of infra tab) -->
+  <div class="chart-card">
+    <div class="chart-title">NFS File Queue Depth</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+      <div>
+        <div style="color:#bc8cff;font-weight:600;margin-bottom:4px">raw</div>
+        <div id="q-raw" style="color:var(--text-muted)">—</div>
+      </div>
+      <div>
+        <div style="color:#3fb950;font-weight:600;margin-bottom:4px">features</div>
+        <div id="q-feat" style="color:var(--text-muted)">—</div>
+      </div>
     </div>
   </div>
 </div>
@@ -440,8 +352,6 @@
   <div class="chart-card" style="margin-bottom:16px">
     <div class="chart-title">GNN + XGBoost Pipeline Flow</div>
     <div style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
-      <div style="background:#21262d;border:1px solid #bc8cff;border-radius:6px;padding:6px 10px;color:#bc8cff;font-weight:600">GEN</div>
-      <div style="color:var(--text-muted)">→ NFS →</div>
       <div style="background:#21262d;border:1px solid #bc8cff;border-radius:6px;padding:6px 10px;color:#bc8cff;font-weight:600">PREP</div>
       <div style="color:var(--text-muted)">→ NFS →</div>
       <div style="background:#21262d;border:1px solid #3fb950;border-radius:6px;padding:6px 10px;color:#3fb950;font-weight:600">GraphSAGE</div>
@@ -465,15 +375,11 @@
       <div class="chart-container" style="height:280px"><canvas id="fraud-hist-chart"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">CPU vs GPU Training Time</div>
-      <div class="chart-container" style="height:200px"><canvas id="train-time-chart"></canvas></div>
-    </div>
-    <div class="chart-card">
       <div class="chart-title">GNN Architecture</div>
       <div style="padding:8px;font-size:12px;color:var(--text-muted);line-height:1.6">
         <div><strong style="color:var(--text)">GraphSAGE</strong> — Tri-partite graph</div>
-        <div style="margin:4px 0">User ↔ Transaction ↔ Merchant</div>
-        <div>2-layer SAGEConv: <span style="color:#bc8cff">21 → 16 → 8</span> dims</div>
+        <div style="margin:4px 0">User <-> Transaction <-> Merchant</div>
+        <div>2-layer SAGEConv: <span style="color:#bc8cff">21 -> 16 -> 8</span> dims</div>
         <div style="margin-top:8px"><strong style="color:var(--text)">XGBoost</strong></div>
         <div>Input: <span style="color:#3fb950">21 tabular + 8 GNN = 29 features</span></div>
         <div style="margin-top:4px" id="gnn-model-stats">—</div>
@@ -492,7 +398,6 @@
 // ---------------------------------------------------------------------------
 let ws = null;
 let wsConnected = false;
-let stressActive = false;
 let shapLoaded = false;
 let modelTabOpened = false;
 const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
@@ -501,7 +406,7 @@ const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
 const history = {
   gpu_n29_0: [], gpu_n29_1: [], gpu_n25_0: [], gpu_n25_1: [],
   cpu_n29: [], cpu_n25: [],
-  tput: [], tx: [], fbLatency: [], labels: []
+  tx: [], fbLatency: [], labels: []
 };
 
 // ---------------------------------------------------------------------------
@@ -555,11 +460,8 @@ function makeBarChart(id, labels, data, color, horizontal = false) {
   });
 }
 
-const tputChart = makeLineChart('tput-chart', 'MB/s', '#3fb950', 0, null);
-
 let catChart = null;
 let shapChart = null;
-let trainTimeChart = null;
 let utilChart = null;
 let tputLatChart = null;
 let txChart = null;
@@ -624,14 +526,14 @@ function toggleChartLine(chart, idx) {
   chart.update('none');
 }
 
-// Initialise category chart with placeholder
+// Initialise charts
 const ALL_CATS = ['misc_net','grocery_pos','entertainment','gas_transport','misc_pos',
   'grocery_net','shopping_net','shopping_pos','food_dining','personal_care',
   'health_fitness','travel','kids_pets','home'];
 catChart = makeBarChart('cat-chart', ALL_CATS.map(c => c.replace('_', ' ')), new Array(14).fill(0), '#e3b341', true);
 utilChart = makeUtilChart();
 tputLatChart = makeTputLatChart();
-txChart = makeLineChart('tx-chart', 'TX/s', '#3fb950', 0, null);
+txChart = makeLineChart('tx-chart', 'Rows/s', '#3fb950', 0, null);
 
 // ---------------------------------------------------------------------------
 // WebSocket
@@ -666,22 +568,7 @@ function connectWS() {
 // Dashboard update
 // ---------------------------------------------------------------------------
 function updateDashboard(data) {
-  // Stress banner
-  const banner = document.getElementById('stress-banner');
-  if (data.stress_mode) {
-    banner.style.display = 'block';
-    stressActive = true;
-    document.getElementById('stress-btn').textContent = '⚡ Stop Stress';
-    document.getElementById('stress-btn').className = 'btn-danger';
-  } else {
-    banner.style.display = 'none';
-    stressActive = false;
-    document.getElementById('stress-btn').textContent = '⚡ Stress';
-    document.getElementById('stress-btn').className = 'btn-stress';
-  }
-
-  // Sync Start / Stop / Stress button states from authoritative server state.
-  // Skip text update during transient "…" states (startPipeline/stopPipeline set those).
+  // Sync Start / Stop button states from server state
   const isRunning = !!data.is_running;
   const startBtn  = document.getElementById('start-btn');
   if (!startBtn.textContent.startsWith('…')) {
@@ -689,8 +576,7 @@ function updateDashboard(data) {
     startBtn.className   = isRunning ? 'btn-secondary' : 'btn-primary';
   }
   startBtn.disabled = isRunning;
-  document.getElementById('stop-btn').disabled    = !isRunning;
-  document.getElementById('stress-btn').disabled  = !isRunning;
+  document.getElementById('stop-btn').disabled = !isRunning;
   if (!isRunning) stopPodPolling();
 
   // Elapsed
@@ -705,8 +591,7 @@ function updateDashboard(data) {
   document.getElementById('kpi-exposure').textContent = '$' + fmtNum(biz.fraud_exposure_usd || 0);
   document.getElementById('kpi-txns').textContent = fmtNum(biz.total_transactions || 0);
   document.getElementById('kpi-flagged').textContent = fmtNum(biz.fraud_flagged || 0);
-  document.getElementById('kpi-fraud-pct').textContent = (biz.fraud_rate_pct || 0).toFixed(3) + '% rate';
-  document.getElementById('kpi-savings').textContent = '$' + fmtNum(biz.projected_annual_savings_usd || 0);
+  document.getElementById('kpi-fraud-rate').textContent = (biz.fraud_rate_pct || 0).toFixed(2) + '%';
 
   // System KPIs
   const sys = data.system || {};
@@ -731,18 +616,7 @@ function updateDashboard(data) {
   document.getElementById('kpi-gpu-n25-1').textContent = gn25_1.toFixed(1) + '%';
   document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_n25_1_mem_pct || 0).toFixed(1) + '% mem';
 
-  // Workers
-  const gather = (data.pipeline || {}).gather || {};
-  document.getElementById('kpi-workers').textContent = gather.workers || '—';
-
-  // Storage
-  const stor = data.storage || {};
-  document.getElementById('kpi-storage').textContent = (stor.total_size_gb || 0).toFixed(1) + ' GB';
-  document.getElementById('kpi-storage-sub').textContent =
-    'raw ' + (stor.raw_size_gb || 0).toFixed(1) + ' | feat ' + (stor.feat_size_gb || 0).toFixed(1) + ' | scores ' + (stor.score_size_gb || 0).toFixed(1);
-
-  // Throughput (prep processing rate, not gather generation)
-  const tput = gather.throughput_mbps || 0;
+  // Throughput (prep processing rate)
   const fb = data.flashblade || {};
   const fbNfsOps = fb.avg_latency_ms || 0;
 
@@ -761,12 +635,10 @@ function updateDashboard(data) {
   pushHistory(history.gpu_n25_1, gn25_1);
   pushHistory(history.cpu_n29, cpuN29);
   pushHistory(history.cpu_n25, cpuN25);
-  pushHistory(history.tput, tput);
   pushHistory(history.tx, txRate);
   pushHistory(history.fbLatency, fbNfsOps);
   pushHistory(history.labels, now);
 
-  updateLineChart(tputChart, history.labels, history.tput);
   updateLineChart(txChart, history.labels, history.tx);
 
   // Chart 1: GPU / CPU Utilization
@@ -782,7 +654,7 @@ function updateDashboard(data) {
     utilChart.update('none');
   }
 
-  // Chart 2: Throughput & Latency
+  // Chart 2: Processing Throughput & Latency
   if (tputLatChart) {
     tputLatChart.data.labels = [...history.labels];
     tputLatChart.data.datasets[0].data = [...history.tx];
@@ -802,91 +674,28 @@ function updateDashboard(data) {
     catChart.update();
   }
 
-  // Pipeline stages
-  const prep      = (data.pipeline || {}).prep       || {};
-  const scoring   = (data.pipeline || {}).scoring    || {};
-  const train     = (data.pipeline || {}).train      || {};
-
-  // Pipeline throughput funnel
-  const genRps = gather.rows_per_sec || 0;
-  document.getElementById('lane-gen').textContent  = genRps ? fmtNum(genRps) + '/s' : '—';
-  const qRaw = ((data.queue || {}).raw || {}).pending || 0;
-  document.getElementById('lane-gen-q').textContent = qRaw ? `[${qRaw} pending]` : '';
-
-  const prepRows = prep.rows || 0;
-  const gpuUsed = prep.gpu_used;
-  const prepEl = document.getElementById('lane-prep');
-  if (prepRows) {
-    prepEl.innerHTML = fmtNum(prepRows) + ' rows' +
-      (gpuUsed === 0 ? ' <span style="font-size:10px;color:#f85149">(CPU fallback)</span>' : '');
-  } else { prepEl.textContent = '—'; }
-  document.getElementById('lane-prep-sub').textContent =
-    prep.speedup ? `${prep.speedup?.toFixed(1)}x speedup` : '';
-
-  // Model train status
-  const trainEl = document.getElementById('lane-train');
-  if (train.cycle) {
-    trainEl.textContent = 'Cycle ' + train.cycle;
-  } else if (train.f1_gpu) {
-    trainEl.textContent = 'Ready';
-  } else { trainEl.textContent = '—'; }
-  document.getElementById('lane-train-sub').textContent =
-    train.f1_gpu ? `F1: ${train.f1_gpu.toFixed(3)}` : '';
-
-  const scoreRows = scoring.rows || 0;
-  document.getElementById('lane-score').textContent = scoreRows ? fmtNum(scoreRows) + ' rows' : '—';
-  document.getElementById('lane-score-sub').textContent =
-    scoring.latency_ms ? `${scoring.latency_ms?.toFixed(1)}ms latency` : '';
-
   // Queue depths (Tab 2)
   function fmtQueue(q) {
     if (!q) return '—';
-    return `${q.pending} pending • ${q.processing} processing • ${q.done} done`;
+    return `${q.pending} pending \u2022 ${q.processing} processing \u2022 ${q.done} done`;
   }
   const queue = data.queue || {};
   const qEl = id => document.getElementById(id);
   if (qEl('q-raw'))  qEl('q-raw').textContent  = fmtQueue(queue.raw);
   if (qEl('q-feat')) qEl('q-feat').textContent = fmtQueue(queue.features);
 
-  // Speedup table
-  const rows = [];
-  if (prep.cpu_time_s) {
-    rows.push(`<tr>
-      <td>Data Prep</td>
-      <td>${prep.cpu_time_s?.toFixed(2)}s</td>
-      <td>${prep.gpu_time_s?.toFixed(2)}s</td>
-      <td><span class="speedup-badge">${prep.speedup?.toFixed(1)}x</span></td>
-    </tr>`);
-  }
-  if (train.cpu_train_time_s) {
-    rows.push(`<tr>
-      <td>XGBoost Train</td>
-      <td>${train.cpu_train_time_s?.toFixed(1)}s</td>
-      <td>${train.gpu_train_time_s?.toFixed(1)}s</td>
-      <td><span class="speedup-badge">${train.speedup?.toFixed(1)}x</span></td>
-    </tr>`);
-  }
-  if (rows.length) document.getElementById('speedup-table').innerHTML = rows.join('');
-
-  // Storage (infra tab)
-  const storInfra = data.storage || {};
-  document.getElementById('raw-files').textContent     = storInfra.raw_files || 0;
-  document.getElementById('raw-size').textContent      = (storInfra.raw_size_gb || 0).toFixed(2) + ' GB';
-  document.getElementById('feat-files').textContent    = storInfra.features_files || 0;
-  const mr = document.getElementById('models-ready');
-  mr.textContent = storInfra.models_ready ? 'Yes' : 'No';
-  mr.style.color = storInfra.models_ready ? 'var(--green)' : 'var(--text-muted)';
-
   // Model metrics from telemetry
+  const train = (data.pipeline || {}).train || {};
   if (train.f1_gpu) {
     document.getElementById('kpi-f1').textContent = train.f1_gpu.toFixed(3);
     document.getElementById('kpi-auc-pr').textContent = (train.auc_pr || 0).toFixed(3);
   }
 
   // Flow stats (Tab 3)
+  const scoring = (data.pipeline || {}).scoring || {};
   const flowEl = document.getElementById('flow-stats');
   if (flowEl && scoring.latency_ms) {
-    flowEl.textContent = `Latency: ${scoring.latency_ms?.toFixed(1)}ms • fraud_rate: ${((scoring.fraud_rate || 0) * 100).toFixed(2)}%`;
+    flowEl.textContent = `Latency: ${scoring.latency_ms?.toFixed(1)}ms \u2022 fraud_rate: ${((scoring.fraud_rate || 0) * 100).toFixed(2)}%`;
   }
 
   // GNN model stats (Tab 3)
@@ -936,8 +745,6 @@ function updateFraudHistogram(fraud) {
   if (!fraud.total_scored) return;
   const ctx = document.getElementById('fraud-hist-chart');
   if (!ctx) return;
-  // Build 10-bucket histogram from recent_alerts for approximation
-  // Real histogram would need raw score array — use what we have
   const buckets = new Array(10).fill(0);
   (fraud.recent_alerts || []).forEach(a => {
     const b = Math.min(9, Math.floor((a.fraud_score || 0) * 10));
@@ -1020,29 +827,6 @@ async function loadTrainingMetrics() {
     if (m.auc_pr !== undefined) document.getElementById('kpi-auc-pr').textContent = m.auc_pr.toFixed(3);
     if (m.precision !== undefined) document.getElementById('kpi-prec').textContent = m.precision.toFixed(3);
     if (m.recall !== undefined) document.getElementById('kpi-recall').textContent = m.recall.toFixed(3);
-
-    // Training time comparison chart
-    const ctx = document.getElementById('train-time-chart');
-    if (!ctx) return;
-    if (trainTimeChart) trainTimeChart.destroy();
-    trainTimeChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: ['Data Prep', 'Model Training'],
-        datasets: [
-          { label: 'CPU', data: [m.cpu_prep_time_s || 0, m.cpu_train_time_s || 0], backgroundColor: '#58a6ff88', borderRadius: 4 },
-          { label: 'GPU', data: [m.gpu_prep_time_s || 0, m.gpu_train_time_s || 0], backgroundColor: '#3fb95088', borderRadius: 4 }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: true, labels: { color: '#8b949e', font: { size: 11 } } } },
-        scales: {
-          x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,0.5)' } },
-          y: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,0.5)' }, title: { display: true, text: 'Seconds', color: '#8b949e' } }
-        }
-      }
-    });
   } catch (e) { /* silent */ }
 }
 
@@ -1062,7 +846,6 @@ function updateLineChart(chart, labels, data) {
 }
 
 function fmtNum(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return String(Math.round(n));
@@ -1087,11 +870,8 @@ function showTab(name, btn) {
 // ---------------------------------------------------------------------------
 // Control actions
 // ---------------------------------------------------------------------------
-// ============================================================
-// Control Modal — shared backdrop for all action flows
-// ============================================================
 let _ctlTimer = null;
-const ALL_BTNS = ['start-btn','stop-btn','stress-btn','reset-btn'];
+const ALL_BTNS = ['start-btn','stop-btn','reset-btn'];
 
 function _ctlShow(title, sub) {
   if (_ctlTimer) { clearTimeout(_ctlTimer); _ctlTimer = null; }
@@ -1106,7 +886,6 @@ function _ctlShow(title, sub) {
   ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
 }
 
-// Show a styled confirm dialog inside the modal. Returns a Promise<boolean>.
 function _ctlConfirm(title, body, confirmLabel) {
   return new Promise(resolve => {
     document.getElementById('pod-modal-title').textContent   = title;
@@ -1125,7 +904,7 @@ function _ctlConfirm(title, body, confirmLabel) {
     can.style.display = 'block';
 
     ok.onclick = () => {
-      ok.style.background = '';  // reset to green for future uses
+      ok.style.background = '';
       ok.style.display = 'none';
       can.style.display = 'none';
       resolve(true);
@@ -1147,39 +926,34 @@ function _ctlDone(title, sub, dismissLabel, onDismiss) {
   document.getElementById('pod-modal-title').style.color = 'var(--green)';
   document.getElementById('pod-modal-sub').textContent   = sub;
   const btn = document.getElementById('pod-modal-dismiss');
-  btn.textContent = dismissLabel || '✓ Dismiss';
+  btn.textContent = dismissLabel || 'Dismiss';
   btn.style.display = 'block';
   btn.onclick = () => {
     document.getElementById('pod-modal-backdrop').classList.remove('visible');
     ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
     if (onDismiss) onDismiss();
-    // WS updateDashboard() corrects button states within ~1s
   };
 }
 
-// Render per-pod chips. mode 'up': Ready=✓, Scaling=⟳, Stopped=○
-//                        mode 'down': Stopped=✓, else=⟳
 function _ctlRenderPods(services, podEntries, mode) {
   document.getElementById('pod-modal-chips').innerHTML = podEntries.map(([key, label]) => {
     const st   = (services || {})[key] || (mode === 'down' ? 'Scaling' : 'Stopped');
     const done = mode === 'down' ? st === 'Stopped' : st === 'Ready';
     const idle = mode !== 'down' && st === 'Stopped';
     const cls  = done ? 'pod-ready' : idle ? 'pod-stopped' : 'pod-scaling';
-    const icon = done ? '✓'        : idle ? '○'           : '⟳';
+    const icon = done ? '\u2713'    : idle ? '\u25CB'       : '\u27F3';
     return `<div class="pod-modal-row ${cls}"><span class="icon">${icon}</span>${label}</div>`;
   }).join('');
 }
 
-// Render sequential step list
 function _ctlRenderSteps(steps) {
   document.getElementById('pod-modal-chips').innerHTML = steps.map(s => {
     const cls  = s.done ? 'pod-ready' : s.active ? 'pod-scaling' : 'pod-stopped';
-    const icon = s.done ? '✓'         : s.active ? '⟳'          : '○';
+    const icon = s.done ? '\u2713'    : s.active ? '\u27F3'      : '\u25CB';
     return `<div class="pod-modal-row ${cls}"><span class="icon">${icon}</span>${s.label}</div>`;
   }).join('');
 }
 
-// Poll /api/status every 2s; call renderFn(data) each tick; resolve when doneFn(data)===true
 function _ctlPoll(renderFn, doneFn) {
   return new Promise(resolve => {
     const tick = async () => {
@@ -1194,7 +968,6 @@ function _ctlPoll(renderFn, doneFn) {
   });
 }
 
-// Run steps array sequentially then call _ctlDone
 async function _ctlRunSteps(steps, doneTitle, doneSub, dismissLabel, onDismiss) {
   for (const s of steps) {
     s.active = true; s.done = false;
@@ -1218,42 +991,33 @@ async function _ctlRunSteps(steps, doneTitle, doneSub, dismissLabel, onDismiss) 
 
 // Clear all dashboard displays (used by reset)
 function _clearDashboard() {
-  alertRows = [];
   document.getElementById('alerts-body').innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">Pipeline not running</td></tr>';
-  ['lane-gen','lane-prep','lane-train','lane-score'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.textContent = '—';
-  });
-  ['lane-gen-q','lane-prep-sub','lane-train-sub','lane-score-sub'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.textContent = '';
-  });
   ['q-raw','q-feat'].forEach(id => {
     const el = document.getElementById(id); if (el) el.textContent = '—';
   });
-  document.getElementById('speedup-table').innerHTML = '';
   document.getElementById('kpi-exposure').textContent = '$0';
   document.getElementById('kpi-txns').textContent = '0';
   document.getElementById('kpi-flagged').textContent = '0';
-  document.getElementById('kpi-fraud-pct').textContent = '0.000% rate';
-  document.getElementById('kpi-savings').textContent = '$0';
+  document.getElementById('kpi-fraud-rate').textContent = '0%';
   document.getElementById('kpi-cpu').textContent = '0%';
   const cpuN25El = document.getElementById('kpi-cpu-n25');
   if (cpuN25El) cpuN25El.textContent = '0%';
   document.getElementById('kpi-ram').textContent = '0%';
   document.getElementById('kpi-ram-sub').textContent = '0 GB used';
-  document.getElementById('kpi-gpu-n29-0').textContent = '0%';
-  document.getElementById('kpi-gpu-n29-0-mem').textContent = '0% mem';
-  document.getElementById('kpi-gpu-n29-1').textContent = '0%';
-  document.getElementById('kpi-gpu-n29-1-mem').textContent = '0% mem';
-  document.getElementById('kpi-workers').textContent = '—';
+  ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
+    document.getElementById(id).textContent = '0%';
+  });
+  ['kpi-gpu-n29-0-mem','kpi-gpu-n29-1-mem','kpi-gpu-n25-0-mem','kpi-gpu-n25-1-mem'].forEach(id => {
+    document.getElementById(id).textContent = '0% mem';
+  });
   ['kpi-f1','kpi-auc-pr','kpi-prec','kpi-recall'].forEach(id => { document.getElementById(id).textContent = '—'; });
   history.gpu_n29_0.length = 0; history.gpu_n29_1.length = 0;
   history.gpu_n25_0.length = 0; history.gpu_n25_1.length = 0;
   history.cpu_n29.length = 0; history.cpu_n25.length = 0;
-  history.tput.length = 0; history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
-  updateLineChart(tputChart, [], []); updateLineChart(txChart, [], []);
+  history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
+  updateLineChart(txChart, [], []);
   if (utilChart) { utilChart.data.labels = []; utilChart.data.datasets.forEach(ds => ds.data = []); utilChart.update('none'); }
   if (tputLatChart) { tputLatChart.data.labels = []; tputLatChart.data.datasets.forEach(ds => ds.data = []); tputLatChart.update('none'); }
-  if (trainTimeChart) { trainTimeChart.destroy(); trainTimeChart = null; }
   if (shapChart) { shapChart.destroy(); shapChart = null; }
   if (fraudHistChart) { fraudHistChart.destroy(); fraudHistChart = null; }
   shapLoaded = false;
@@ -1276,7 +1040,7 @@ async function startPipeline() {
 }
 
 async function stopPipeline() {
-  _ctlShow('■ Stopping Pipeline…', 'Scaling all pods to zero');
+  _ctlShow('Stopping Pipeline...', 'Scaling all pods to zero');
   const pods = Object.entries(SERVICE_LABELS);
   _ctlRenderPods({}, pods, 'down');
   fetch('/api/control/stop', { method: 'POST' }).catch(() => {});
@@ -1284,17 +1048,17 @@ async function stopPipeline() {
     d => _ctlRenderPods(d.services || {}, pods, 'down'),
     d => pods.every(([k]) => ['Stopped','NotFound'].includes((d.services || {})[k]))
   );
-  _ctlDone('■ Pipeline Stopped', 'All pods scaled to zero. Ready to start again.', null, null);
+  _ctlDone('Pipeline Stopped', 'All pods scaled to zero. Ready to start again.', null, null);
 }
 
 async function resetPipeline() {
   const ok = await _ctlConfirm(
-    '↺ Reset Pipeline?',
+    'Reset Pipeline?',
     'This will stop all pods, re-queue raw data for reprocessing, and clear features/scores. Models are preserved.',
-    '↺ Confirm Reset'
+    'Confirm Reset'
   );
   if (!ok) return;
-  _ctlShow('↺ Resetting Pipeline…', 'Stopping pods and re-queuing raw data');
+  _ctlShow('Resetting Pipeline...', 'Stopping pods and re-queuing raw data');
   const pods = Object.entries(SERVICE_LABELS);
   const steps = [
     {
@@ -1311,46 +1075,13 @@ async function resetPipeline() {
       action: async () => _clearDashboard(),
     },
   ];
-  await _ctlRunSteps(steps, '↺ Reset Complete', 'Raw data re-queued. Ready for a fresh run.', null, null);
-}
-
-async function toggleStress() {
-  if (stressActive) {
-    // Stop stress — scale back to normal replicas
-    _ctlShow('🔄 Returning to Normal Mode…', 'Scaling scoring back to standard');
-    const steps = [
-      {
-        label:  'Restoring normal config',
-        action: () => fetch('/api/control/stress-stop', { method: 'POST' }),
-      },
-      { label: 'Scoring → x2', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['scoring'] || {}).desired === 2;
-        }},
-    ];
-    await _ctlRunSteps(steps, '🔄 Normal Mode', 'Pipeline running at standard throughput.', null, null);
-  } else {
-    // Start stress — scale scoring for higher throughput (all 4 GPUs already active)
-    _ctlShow('⚡ Activating Stress Mode…', 'Scaling scoring to x4 for maximum throughput');
-    const steps = [
-      {
-        label:  'Activating high-throughput config',
-        action: () => fetch('/api/control/stress', { method: 'POST' }),
-      },
-      { label: 'Scoring → x4', check: async () => {
-          const d = await fetch('/api/status').then(r => r.json());
-          return ((d.replicas || {})['scoring'] || {}).desired === 4;
-        }},
-    ];
-    await _ctlRunSteps(steps, '⚡ Stress Mode Active', 'All 4 GPUs active, scoring at maximum throughput.', null, null);
-  }
+  await _ctlRunSteps(steps, 'Reset Complete', 'Raw data re-queued. Ready for a fresh run.', null, null);
 }
 
 // ---------------------------------------------------------------------------
 // Pod startup status bar
 // ---------------------------------------------------------------------------
 const SERVICE_LABELS = {
-  'data-gather':   'Generate',
   'data-prep':     'Data Prep',
   'model-train':   'Model Train',
   'triton':        'Triton',
@@ -1360,7 +1091,7 @@ const SERVICE_LABELS = {
 let podPollInterval = null;
 
 function showPodModal() {
-  _ctlShow('🚀 Starting Pipeline…', 'Pods are scaling up — takes 20–60 s on first start');
+  _ctlShow('Starting Pipeline...', 'Pods are scaling up — takes 20-60 s on first start');
   startPodPolling();
 }
 
@@ -1369,7 +1100,6 @@ function hidePodModal() {
   document.getElementById('pod-modal-backdrop').classList.remove('visible');
   stopPodPolling();
   ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
-  // WS updateDashboard() will correct button states within ~1s
 }
 
 function startPodPolling() {
@@ -1399,8 +1129,8 @@ function renderPodStatus(services, isRunning) {
 
   if (Object.keys(SERVICE_LABELS).every(k => services[k] === 'Ready')) {
     stopPodPolling();
-    _ctlDone('✓ All Pods Ready', 'Pipeline is running. Dismiss to view the dashboard.',
-             '✓ All Ready — Dismiss', null);
+    _ctlDone('All Pods Ready', 'Pipeline is running. Dismiss to view the dashboard.',
+             'All Ready — Dismiss', null);
   }
 }
 
@@ -1408,7 +1138,6 @@ function renderPodStatus(services, isRunning) {
 // Boot
 // ---------------------------------------------------------------------------
 connectWS();
-// Poll for training metrics once a minute even without tab open
 setInterval(() => { if (modelTabOpened && shapLoaded) loadTrainingMetrics(); }, 60000);
 </script>
 </body>

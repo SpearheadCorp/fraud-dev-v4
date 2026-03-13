@@ -119,23 +119,6 @@ async def reset_pipeline():
 
 
 
-@app.post("/api/control/stress")
-async def start_stress():
-    state.stress_mode = True
-    state.last_telemetry.pop("gather", None)
-    _write_gather_config(GATHER_STRESS_WORKERS, GATHER_STRESS_RATE)
-    pl.write_stress_config(True)
-    return {"status": "stress mode activated"}
-
-
-@app.post("/api/control/stress-stop")
-async def stop_stress():
-    state.stress_mode = False
-    state.last_telemetry.pop("gather", None)
-    _write_gather_config(GATHER_NORMAL_WORKERS, GATHER_NORMAL_RATE)
-    pl.write_stress_config(False)
-    return {"status": "stress mode deactivated"}
-
 
 @app.get("/api/metrics/current")
 async def get_current_metrics():

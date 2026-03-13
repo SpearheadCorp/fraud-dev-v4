@@ -466,14 +466,12 @@ class MetricsCollector:
         fraud_flagged = int(total_txns * fraud_rate)
         avg_fraud_amt = 250.0
         fraud_exposure = fraud_flagged * avg_fraud_amt
-        annual_savings = fraud_exposure * 365 / max(self.state.elapsed_sec / 86400, 1 / 365)
         return {
             "total_transactions": total_txns,
             "prep_rows_per_sec": prep_rps,
             "fraud_flagged": fraud_flagged,
-            "fraud_rate_pct": round(fraud_rate * 100, 3),
+            "fraud_rate_pct": round(fraud_rate * 100, 2),
             "fraud_exposure_usd": round(fraud_exposure, 0),
-            "projected_annual_savings_usd": round(min(annual_savings, 50_000_000), 0),
         }
 
     # ------------------------------------------------------------------
