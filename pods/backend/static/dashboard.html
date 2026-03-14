@@ -931,6 +931,7 @@ function _ctlDone(title, sub, dismissLabel, onDismiss) {
   btn.onclick = () => {
     document.getElementById('pod-modal-backdrop').classList.remove('visible');
     ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+    document.getElementById('start-btn').textContent = '▶ Start';
     if (onDismiss) onDismiss();
   };
 }
@@ -1100,6 +1101,7 @@ function hidePodModal() {
   document.getElementById('pod-modal-backdrop').classList.remove('visible');
   stopPodPolling();
   ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
+  document.getElementById('start-btn').textContent = '▶ Start';
 }
 
 function startPodPolling() {
