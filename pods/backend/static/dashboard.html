@@ -371,7 +371,7 @@
       <div class="chart-container" style="height:280px"><canvas id="shap-chart"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">Fraud Score Distribution (last 1000 scored)</div>
+      <div class="chart-title">High-Risk Score Distribution (scores &gt; 0.8)</div>
       <div class="chart-container" style="height:280px"><canvas id="fraud-hist-chart"></canvas></div>
     </div>
     <div class="chart-card">
@@ -379,9 +379,9 @@
       <div style="padding:8px;font-size:12px;color:var(--text-muted);line-height:1.6">
         <div><strong style="color:var(--text)">GraphSAGE</strong> — Tri-partite graph</div>
         <div style="margin:4px 0">User <-> Transaction <-> Merchant</div>
-        <div>2-layer SAGEConv: <span style="color:#bc8cff">21 -> 16 -> 8</span> dims</div>
+        <div>2-layer SAGEConv: <span style="color:#bc8cff">35 → 64 → 32</span> dims</div>
         <div style="margin-top:8px"><strong style="color:var(--text)">XGBoost</strong></div>
-        <div>Input: <span style="color:#3fb950">21 tabular + 8 GNN = 29 features</span></div>
+        <div>Input: <span style="color:#3fb950">35 tabular + 32 GNN = 67 features</span></div>
         <div style="margin-top:4px" id="gnn-model-stats">—</div>
       </div>
     </div>
@@ -579,6 +579,12 @@ function updateDashboard(data) {
   document.getElementById('stop-btn').disabled = !isRunning;
   if (!isRunning) stopPodPolling();
 
+  // LIVE badge visibility
+  const liveBadge = document.querySelector('.live-badge');
+  if (liveBadge) {
+    liveBadge.style.display = isRunning ? 'flex' : 'none';
+  }
+
   // Elapsed
   const e = data.elapsed_sec || 0;
   const h = String(Math.floor(e / 3600)).padStart(2, '0');
@@ -686,8 +692,8 @@ function updateDashboard(data) {
 
   // Model metrics from telemetry
   const train = (data.pipeline || {}).train || {};
-  if (train.f1_gpu) {
-    document.getElementById('kpi-f1').textContent = train.f1_gpu.toFixed(3);
+  if (train.f1) {
+    document.getElementById('kpi-f1').textContent = train.f1.toFixed(3);
     document.getElementById('kpi-auc-pr').textContent = (train.auc_pr || 0).toFixed(3);
   }
 
@@ -745,13 +751,14 @@ function updateFraudHistogram(fraud) {
   if (!fraud.total_scored) return;
   const ctx = document.getElementById('fraud-hist-chart');
   if (!ctx) return;
-  const buckets = new Array(10).fill(0);
+  const buckets = new Array(5).fill(0);
   (fraud.recent_alerts || []).forEach(a => {
-    const b = Math.min(9, Math.floor((a.fraud_score || 0) * 10));
-    buckets[b]++;
+    const s = a.fraud_score || 0;
+    const b = Math.min(4, Math.floor((s - 0.8) / 0.04));
+    if (b >= 0) buckets[b]++;
   });
-  const labels = ['0-0.1','0.1-0.2','0.2-0.3','0.3-0.4','0.4-0.5','0.5-0.6','0.6-0.7','0.7-0.8','0.8-0.9','0.9-1.0'];
-  const colors = labels.map((_, i) => i >= 8 ? '#f8514999' : i >= 5 ? '#e3b34199' : '#3fb95099');
+  const labels = ['0.80','0.84','0.88','0.92','0.96'];
+  const colors = labels.map((_, i) => i >= 3 ? '#f8514999' : '#e3b34199');
   if (fraudHistChart) {
     fraudHistChart.data.datasets[0].data = buckets;
     fraudHistChart.update('none');
@@ -823,7 +830,7 @@ async function loadTrainingMetrics() {
     clearTimeout(timer);
     if (!resp.ok) return;
     const m = await resp.json();
-    if (m.f1_gpu !== undefined) document.getElementById('kpi-f1').textContent = m.f1_gpu.toFixed(3);
+    if (m.f1 !== undefined) document.getElementById('kpi-f1').textContent = m.f1.toFixed(3);
     if (m.auc_pr !== undefined) document.getElementById('kpi-auc-pr').textContent = m.auc_pr.toFixed(3);
     if (m.precision !== undefined) document.getElementById('kpi-prec').textContent = m.precision.toFixed(3);
     if (m.recall !== undefined) document.getElementById('kpi-recall').textContent = m.recall.toFixed(3);

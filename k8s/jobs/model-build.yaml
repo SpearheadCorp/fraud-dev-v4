@@ -24,7 +24,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: INPUT_PATH
-              value: /data/features/gpu
+              value: /data/features
             - name: MODEL_REPO
               value: /data/models
             - name: MAX_SAMPLES

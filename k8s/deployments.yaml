@@ -290,7 +290,7 @@ spec:
               nvidia.com/gpu: "1"
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
@@ -326,7 +326,7 @@ spec:
       containers:
         - name: model-train
           image: 10.23.181.247:5000/fraud-det-v4/model-train:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           env:
             - name: INPUT_PATH
               value: /data/features
@@ -356,7 +356,7 @@ spec:
               nvidia.com/gpu: "1"
           livenessProbe:
             exec:
-              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<30"]
+              command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
