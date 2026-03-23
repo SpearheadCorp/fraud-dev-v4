@@ -21,13 +21,12 @@ NAMESPACE = os.environ.get("K8S_NAMESPACE", "fraud-det-v31")
 # All deployments tracked for status/replica queries.
 ALL_DEPLOYMENTS = ["data-gather", "data-prep", "triton", "scoring", "model-train"]
 
-# Pipeline = everything except gather. 3 GPU pods + Triton.
-# model-train is excluded: its file writes cause Triton to reload/unload the model.
-# Run model-train manually via kubectl if needed for training demos.
+# Pipeline = everything except gather. 4 pods on 4 GPUs.
 PIPELINE_REPLICAS = {
     "data-prep":     1,   # 1 dedicated GPU — mega-batch (100M+ rows/batch)
     "triton":        1,   # 1 dedicated GPU
     "scoring":       1,   # 1 dedicated GPU
+    "model-train":   1,   # 1 dedicated GPU
 }
 
 
@@ -56,37 +55,13 @@ def _scale(apps_v1: client.AppsV1Api, name: str, replicas: int) -> None:
 # Public API
 # ---------------------------------------------------------------------------
 
-def _wait_ready(apps_v1: client.AppsV1Api, name: str, timeout: int = 120) -> bool:
-    """Block until deployment has at least 1 ready replica, or timeout."""
-    import time
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            d = apps_v1.read_namespaced_deployment(name=name, namespace=NAMESPACE)
-            if (d.status.ready_replicas or 0) >= 1:
-                return True
-        except ApiException:
-            pass
-        time.sleep(2)
-    log.warning("Timed out waiting for %s to be ready", name)
-    return False
-
-
 def start_pipeline() -> dict:
-    """Scale pipeline Deployments with proper sequencing.
-    Triton must be ready before scoring starts to avoid inference failures.
+    """Scale pipeline Deployments (prep + train + triton + scoring).
     Data-gather must be stopped first (offline, pre-demo only)."""
     _, apps_v1, _ = _k8s()
     _scale(apps_v1, "data-gather", 0)  # safety: ensure gather is off
-
-    # Phase 1: Start Triton and wait for model to load
-    _scale(apps_v1, "triton", 1)
-    _wait_ready(apps_v1, "triton", timeout=120)
-
-    # Phase 2: Start remaining pipeline pods
     for dep, n in PIPELINE_REPLICAS.items():
-        if dep != "triton":
-            _scale(apps_v1, dep, n)
+        _scale(apps_v1, dep, n)
     return {"status": "started"}
 
 
