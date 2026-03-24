@@ -66,14 +66,20 @@ class PipelineState:
         self.start_time: Optional[float] = None
         self.last_telemetry: dict = {}
         self.total_rows_processed: int = 0
+        self.total_fraud_exposure_usd: float = 0.0
+        self.total_fraud_flagged: int = 0
         self._last_prep_chunk_id: int = -1
+        self._processed_score_files: set[str] = set()
 
     def reset(self) -> None:
         self.is_running = False
         self.start_time = None
         self.last_telemetry = {}
         self.total_rows_processed = 0
+        self.total_fraud_exposure_usd = 0.0
+        self.total_fraud_flagged = 0
         self._last_prep_chunk_id = -1
+        self._processed_score_files.clear()
 
     @property
     def elapsed_sec(self) -> int:
@@ -83,7 +89,7 @@ class PipelineState:
 
 
 _TELEMETRY_CACHE = MODEL_REPO / "last_telemetry.json"
-_STATE_CACHE = MODEL_REPO / "pipeline_state.json"  # <-- ADD THIS LINE
+_STATE_CACHE = MODEL_REPO / "pipeline_state.json"
 
 
 class MetricsCollector:
@@ -97,13 +103,15 @@ class MetricsCollector:
                 self.state.last_telemetry = json.loads(_TELEMETRY_CACHE.read_text())
                 log.info("Loaded telemetry cache (%d stages)", len(self.state.last_telemetry))
             
-            # --- ADD THESE LINES ---
             if _STATE_CACHE.exists():
                 state_data = json.loads(_STATE_CACHE.read_text())
                 self.state.total_rows_processed = state_data.get("total_rows", 0)
+                self.state.total_fraud_exposure_usd = state_data.get("total_fraud_exposure", 0.0)
+                self.state.total_fraud_flagged = state_data.get("total_fraud_flagged", 0)
                 self.state._last_prep_chunk_id = state_data.get("last_chunk_id", -1)
-                log.info("Loaded state cache (total_rows=%d)", self.state.total_rows_processed)
-            # -----------------------
+                # Note: _processed_score_files is not persisted, it will be re-populated by scanning
+                log.info("Loaded state cache (total_rows=%d, fraud_exposure=$%.2f)", 
+                         self.state.total_rows_processed, self.state.total_fraud_exposure_usd)
             
         except Exception as exc:
             log.debug("load_telemetry_cache: %s", exc)
@@ -113,13 +121,13 @@ class MetricsCollector:
             _TELEMETRY_CACHE.parent.mkdir(parents=True, exist_ok=True)
             _TELEMETRY_CACHE.write_text(json.dumps(self.state.last_telemetry))
             
-            # --- ADD THESE LINES ---
             state_data = {
                 "total_rows": self.state.total_rows_processed,
+                "total_fraud_exposure": self.state.total_fraud_exposure_usd,
+                "total_fraud_flagged": self.state.total_fraud_flagged,
                 "last_chunk_id": self.state._last_prep_chunk_id
             }
             _STATE_CACHE.write_text(json.dumps(state_data))
-            # -----------------------
             
         except Exception as exc:
             log.debug("save_telemetry_cache: %s", exc)
@@ -132,6 +140,7 @@ class MetricsCollector:
         # Skip pod-log telemetry when pipeline is stopped — stale log lines
         # would otherwise repopulate KPIs from the last run's data.
         telemetry  = self._parse_telemetry() if self.state.is_running else {}
+        self._update_fraud_metrics()
         system     = self._collect_system()
         gpu        = self._collect_gpu()
         business   = self._compute_kpis(telemetry)
@@ -177,6 +186,47 @@ class MetricsCollector:
             "gpu":       gpu,
             "flashblade": flashblade,
         }
+
+    # ------------------------------------------------------------------
+    # Fraud metrics from scored Parquet files
+    # ------------------------------------------------------------------
+
+    def _update_fraud_metrics(self) -> None:
+        """Scan SCORES_PATH for new parquet files and accumulate fraud totals."""
+        try:
+            if not SCORES_PATH.exists():
+                return
+
+            # Find all .parquet files that aren't currently being written (.processing)
+            all_files = sorted(f.name for f in SCORES_PATH.glob("*.parquet")
+                              if not f.name.endswith(".processing"))
+            
+            # Identify files we haven't processed yet in this session
+            new_files = [f for f in all_files if f not in self.state._processed_score_files]
+            if not new_files:
+                return
+
+            log.info("Processing %d new score files for KPIs", len(new_files))
+            total_new_amt = 0.0
+            total_new_flagged = 0
+            
+            for fname in new_files:
+                fpath = SCORES_PATH / fname
+                try:
+                    # Only read the columns we need for speed
+                    df = pd.read_parquet(str(fpath), columns=["amt", "fraud_score"])
+                    fraud_mask = df["fraud_score"] > 0.5
+                    total_new_amt += df.loc[fraud_mask, "amt"].sum()
+                    total_new_flagged += int(fraud_mask.sum())
+                    self.state._processed_score_files.add(fname)
+                except Exception as e:
+                    log.debug("Error reading %s: %s", fname, e)
+
+            self.state.total_fraud_exposure_usd += total_new_amt
+            self.state.total_fraud_flagged += total_new_flagged
+            
+        except Exception as exc:
+            log.debug("_update_fraud_metrics: %s", exc)
 
     # ------------------------------------------------------------------
     # Telemetry from K8s pod logs
@@ -479,9 +529,7 @@ class MetricsCollector:
                 "total_transactions": 0, "prep_rows_per_sec": 0,
                 "fraud_flagged": 0, "fraud_rate_pct": 0.0, "fraud_exposure_usd": 0.0,
             }
-        # Compute rows/sec from feature computation time only (excludes NFS read + arrow)
-        # feat_time = float(prep.get("feat_time_s", 0))
-        # prep_rps = int(batch_rows / feat_time) if feat_time > 0 else 0
+        
         # Compute true end-to-end TPS using chunk origination timestamp
         chunk_ts = float(scoring.get("chunk_ts", 0))
         scoring_rows = int(scoring.get("rows", 0))
@@ -492,18 +540,24 @@ class MetricsCollector:
             prep_rps = int(scoring_rows / elapsed_e2e)
         else:
             prep_rps = 0
-
         
-        # Prefer real fraud rate from scorer; fall back to synthetic rate
-        fraud_rate = float(scoring.get("fraud_rate", 0.005))
-        fraud_flagged = int(total_txns * fraud_rate)
-        avg_fraud_amt = 250.0
-        fraud_exposure = fraud_flagged * avg_fraud_amt
+        # Use real cumulative metrics from scoring files
+        fraud_flagged = self.state.total_fraud_flagged
+        fraud_exposure = self.state.total_fraud_exposure_usd
+        
+        # Calculate real-time fraud rate from last chunk or overall average
+        last_fraud_rate = float(scoring.get("fraud_rate", 0.0))
+        if last_fraud_rate > 0:
+            display_rate = last_fraud_rate
+        else:
+            # Fallback to cumulative average if no recent telemetry
+            display_rate = (fraud_flagged / total_txns) if total_txns > 0 else 0.0
+
         return {
             "total_transactions": total_txns,
             "prep_rows_per_sec": prep_rps,
             "fraud_flagged": fraud_flagged,
-            "fraud_rate_pct": round(fraud_rate * 100, 2),
+            "fraud_rate_pct": round(display_rate * 100, 2),
             "fraud_exposure_usd": round(fraud_exposure, 0),
         }
 
