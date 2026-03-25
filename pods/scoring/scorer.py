@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import tritonclient.http as httpclient
+import tritonclient.grpc as grpcclient
 import cudf
 import cupy as cp
 from concurrent.futures import ThreadPoolExecutor
@@ -187,10 +187,10 @@ class WindowedGraph:
 # Triton inference
 # ---------------------------------------------------------------------------
 
-def _connect_triton(url: str, retries: int) -> httpclient.InferenceServerClient:
+def _connect_triton(url: str, retries: int) -> grpcclient.InferenceServerClient:
     for attempt in range(retries):
         try:
-            client = httpclient.InferenceServerClient(url=url, verbose=False)
+            client = grpcclient.InferenceServerClient(url=url, verbose=False)
             if client.is_server_ready():
                 log.info("[INFO] Triton ready at %s", url)
                 return client
@@ -204,24 +204,24 @@ def _connect_triton(url: str, retries: int) -> httpclient.InferenceServerClient:
 def score_chunk(
     df: pd.DataFrame,
     graph: WindowedGraph,
-    client: httpclient.InferenceServerClient,
+    client: grpcclient.InferenceServerClient,
     model_name: str,
 ) -> np.ndarray:
     """Run GNN+XGBoost inference for new_df rows. Returns fraud probabilities [n_rows]."""
     node_features, edge_index, feature_mask, n_new_tx = graph.build_inference_graph(df)
 
     inputs = [
-        httpclient.InferInput("NODE_FEATURES", list(node_features.shape), "FP32"),
-        httpclient.InferInput("EDGE_INDEX",    list(edge_index.shape),    "INT64"),
-        httpclient.InferInput("FEATURE_MASK",  list(feature_mask.shape),  "INT32"),
-        httpclient.InferInput("COMPUTE_SHAP",  [1],                       "BOOL"),
+        grpcclient.InferInput("NODE_FEATURES", list(node_features.shape), "FP32"),
+        grpcclient.InferInput("EDGE_INDEX",    list(edge_index.shape),    "INT64"),
+        grpcclient.InferInput("FEATURE_MASK",  list(feature_mask.shape),  "INT32"),
+        grpcclient.InferInput("COMPUTE_SHAP",  [1],                       "BOOL"),
     ]
     inputs[0].set_data_from_numpy(node_features)
     inputs[1].set_data_from_numpy(edge_index)
     inputs[2].set_data_from_numpy(feature_mask)
     inputs[3].set_data_from_numpy(np.array([False]))
 
-    outputs = [httpclient.InferRequestedOutput("PREDICTION")]
+    outputs = [grpcclient.InferRequestedOutput("PREDICTION")]
     response = client.infer(model_name, inputs=inputs, outputs=outputs)
     all_probs = response.as_numpy("PREDICTION").flatten()
 

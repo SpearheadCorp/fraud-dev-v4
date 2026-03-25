@@ -294,7 +294,7 @@ spec:
             - name: SCORES_PATH
               value: /data/scores
             - name: TRITON_URL
-              value: triton:8000
+              value: triton:8001
             - name: MODEL_NAME
               value: fraud_gnn_gpu
             - name: WINDOW_CHUNKS
