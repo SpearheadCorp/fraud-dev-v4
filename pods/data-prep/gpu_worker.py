@@ -232,6 +232,9 @@ def _process_mega_batch(file_list: list, cudf) -> tuple:
     n_rows = len(mega)
     log.info("mega-batch: features done — %d rows (%.1fs gpu)", n_rows, t_feat)
 
+    # ── Stamp prep completion time so TPS reflects prep→score latency only ──
+    mega["chunk_ts"] = time.time()
+
     # ── Convert to Arrow (GPU→CPU transfer) then free GPU memory ──
     t_arrow_start = time.perf_counter()
     out_cols = [c for c in _OUTPUT_COLS if c in mega.columns]
