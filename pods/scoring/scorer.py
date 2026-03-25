@@ -190,7 +190,14 @@ class WindowedGraph:
 def _connect_triton(url: str, retries: int) -> grpcclient.InferenceServerClient:
     for attempt in range(retries):
         try:
-            client = grpcclient.InferenceServerClient(url=url, verbose=False)
+            client = grpcclient.InferenceServerClient(
+                url=url,
+                verbose=False,
+                channel_args=[
+                    ("grpc.max_send_message_length", -1),
+                    ("grpc.max_receive_message_length", -1),
+                ],
+            )
             if client.is_server_ready():
                 log.info("[INFO] Triton ready at %s", url)
                 return client
