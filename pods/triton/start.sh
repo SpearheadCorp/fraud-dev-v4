@@ -20,5 +20,4 @@ exec tritonserver \
     --log-verbose=0 \
     --http-port=8000 \
     --grpc-port=8001 \
-    --metrics-port=8002 \
-    --grpc-max-message-size=4294967295
+    --metrics-port=8002
