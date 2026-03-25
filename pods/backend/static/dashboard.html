@@ -214,6 +214,11 @@
       <div class="kpi-value" id="kpi-fraud-rate">0%</div>
       <div class="kpi-sub">of transactions</div>
     </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total $ Processed</div>
+      <div class="kpi-value" id="kpi-total-amt">$0</div>
+      <div class="kpi-sub">transaction volume</div>
+    </div>
   </div>
 
   <div class="chart-grid">
@@ -226,6 +231,17 @@
       <div class="chart-container" style="height:220px"><canvas id="cat-chart"></canvas></div>
     </div>
     <div class="chart-card">
+      <div class="chart-title">Fraud by Geography (State)</div>
+      <table class="alerts-table">
+        <thead>
+          <tr><th>State</th><th>Fraud Amount at Risk</th></tr>
+        </thead>
+        <tbody id="geo-body">
+          <tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:20px">No scored data yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="chart-card full-width">
       <div class="chart-title">Recent High-Risk Alerts (fraud_score &gt; 0.8)</div>
       <table class="alerts-table">
         <thead>
@@ -607,6 +623,7 @@ function updateDashboard(data) {
   document.getElementById('kpi-txns').textContent = fmtComma(biz.total_transactions || 0);
   document.getElementById('kpi-flagged').textContent = fmtComma(biz.fraud_flagged || 0);
   document.getElementById('kpi-fraud-rate').textContent = (biz.fraud_rate_pct || 0).toFixed(2) + '%';
+  document.getElementById('kpi-total-amt').textContent = '$' + fmtComma(biz.total_amount_processed_usd || 0);
 
   // System KPIs
   const sys = data.system || {};
@@ -688,6 +705,20 @@ function updateDashboard(data) {
   if (catChart) {
     catChart.data.datasets[0].data = catData;
     catChart.update();
+  }
+
+  // Fraud by geography table
+  const fraudByGeo = (data.fraud || {}).fraud_by_geography || {};
+  const geoBody = document.getElementById('geo-body');
+  if (geoBody) {
+    const states = Object.keys(fraudByGeo);
+    if (states.length === 0) {
+      geoBody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:20px">No scored data yet</td></tr>';
+    } else {
+      geoBody.innerHTML = states.map((st, i) =>
+        `<tr><td>${st}</td><td>$${fmtComma(fraudByGeo[st])}</td></tr>`
+      ).join('');
+    }
   }
 
   // Queue depths (Tab 2)

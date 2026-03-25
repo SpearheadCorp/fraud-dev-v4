@@ -68,6 +68,7 @@ class PipelineState:
         self.total_rows_processed: int = 0
         self.total_fraud_exposure_usd: float = 0.0
         self.total_fraud_flagged: int = 0
+        self.total_amount_processed_usd: float = 0.0
         self._last_prep_chunk_id: int = -1
         self._processed_score_files: set[str] = set()
 
@@ -78,6 +79,7 @@ class PipelineState:
         self.total_rows_processed = 0
         self.total_fraud_exposure_usd = 0.0
         self.total_fraud_flagged = 0
+        self.total_amount_processed_usd = 0.0
         self._last_prep_chunk_id = -1
         self._processed_score_files.clear()
 
@@ -108,6 +110,7 @@ class MetricsCollector:
                 self.state.total_rows_processed = state_data.get("total_rows", 0)
                 self.state.total_fraud_exposure_usd = state_data.get("total_fraud_exposure", 0.0)
                 self.state.total_fraud_flagged = state_data.get("total_fraud_flagged", 0)
+                self.state.total_amount_processed_usd = state_data.get("total_amount_processed", 0.0)
                 self.state._last_prep_chunk_id = state_data.get("last_chunk_id", -1)
                 # Mark all existing score files as already processed so restart doesn't double-count
                 if SCORES_PATH.exists():
@@ -131,6 +134,7 @@ class MetricsCollector:
                 "total_rows": self.state.total_rows_processed,
                 "total_fraud_exposure": self.state.total_fraud_exposure_usd,
                 "total_fraud_flagged": self.state.total_fraud_flagged,
+                "total_amount_processed": self.state.total_amount_processed_usd,
                 "last_chunk_id": self.state._last_prep_chunk_id
             }
             _STATE_CACHE.write_text(json.dumps(state_data))
@@ -213,23 +217,25 @@ class MetricsCollector:
                 return
 
             log.info("Processing %d new score files for KPIs", len(new_files))
-            total_new_amt = 0.0
+            total_new_fraud_amt = 0.0
             total_new_flagged = 0
-            
+            total_new_txn_amt = 0.0
+
             for fname in new_files:
                 fpath = SCORES_PATH / fname
                 try:
-                    # Only read the columns we need for speed
                     df = pd.read_parquet(str(fpath), columns=["amt", "fraud_score"])
                     fraud_mask = df["fraud_score"] > 0.5
-                    total_new_amt += df.loc[fraud_mask, "amt"].sum()
+                    total_new_fraud_amt += df.loc[fraud_mask, "amt"].sum()
                     total_new_flagged += int(fraud_mask.sum())
+                    total_new_txn_amt += df["amt"].sum()
                     self.state._processed_score_files.add(fname)
                 except Exception as e:
                     log.debug("Error reading %s: %s", fname, e)
 
-            self.state.total_fraud_exposure_usd += total_new_amt
+            self.state.total_fraud_exposure_usd += total_new_fraud_amt
             self.state.total_fraud_flagged += total_new_flagged
+            self.state.total_amount_processed_usd += total_new_txn_amt
             
         except Exception as exc:
             log.debug("_update_fraud_metrics: %s", exc)
@@ -371,11 +377,23 @@ class MetricsCollector:
                     .to_dict()
                 )
 
+            # Fraud-by-geography: sum of fraud amt per state
+            fraud_by_geography = {}
+            if "state" in df.columns and "amt" in df.columns:
+                flagged_geo = df[df["fraud_score"] > 0.5]
+                fraud_by_geography = (
+                    flagged_geo.groupby("state")["amt"].sum()
+                    .round(2)
+                    .sort_values(ascending=False)
+                    .to_dict()
+                )
+
             return {
-                "fraud_rate_pct":  float((df["fraud_score"] > 0.5).mean() * 100),
-                "total_scored":    len(df),
-                "recent_alerts":   alerts[alert_cols].to_dict("records"),
-                "fraud_by_category": fraud_by_category,
+                "fraud_rate_pct":     float((df["fraud_score"] > 0.5).mean() * 100),
+                "total_scored":       len(df),
+                "recent_alerts":      alerts[alert_cols].to_dict("records"),
+                "fraud_by_category":  fraud_by_category,
+                "fraud_by_geography": fraud_by_geography,
             }
         except Exception as exc:
             log.debug("_collect_fraud_metrics: %s", exc)
@@ -574,6 +592,7 @@ class MetricsCollector:
             "fraud_flagged": fraud_flagged,
             "fraud_rate_pct": round(display_rate * 100, 2),
             "fraud_exposure_usd": round(fraud_exposure, 0),
+            "total_amount_processed_usd": round(self.state.total_amount_processed_usd, 0),
         }
 
     # ------------------------------------------------------------------

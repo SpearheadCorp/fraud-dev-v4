@@ -82,7 +82,7 @@ FEATURE_COLS = [
 N_TABULAR = len(FEATURE_COLS)  # 35
 
 GRAPH_COLS = ["cc_num", "merchant"]
-SCORE_COLS = ["trans_num", "cc_num", "merchant", "amt", "category", "is_fraud"]
+SCORE_COLS = ["trans_num", "cc_num", "merchant", "amt", "category", "is_fraud", "state"]
 
 # Pod-unique prefix so multiple replicas don't overwrite each other's score files.
 _POD_PREFIX = os.environ.get("HOSTNAME", str(os.getpid()))
