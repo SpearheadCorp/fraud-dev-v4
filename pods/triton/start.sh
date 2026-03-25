@@ -13,7 +13,8 @@ done
 echo "[INFO] GNN model ready. Starting Triton Inference Server..."
 exec tritonserver \
     --model-repository="${MODEL_REPO}" \
-    --model-control-mode="${TRITON_MODEL_CONTROL_MODE:-poll}" \
+    --model-control-mode="${TRITON_MODEL_CONTROL_MODE:-explicit}" \
+    --load-model=* \
     --repository-poll-secs="${TRITON_POLL_SECS:-3600}" \
     --strict-model-config=false \
     --log-verbose=0 \
