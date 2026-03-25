@@ -354,10 +354,22 @@ class MetricsCollector:
                       .head(20))
             alert_cols = [c for c in ("trans_num", "merchant", "amt", "category", "fraud_score")
                           if c in alerts.columns]
+
+            # Real fraud-by-category: sum of amt for rows flagged as high-risk (> 0.5)
+            fraud_by_category = {}
+            if "category" in df.columns and "amt" in df.columns:
+                flagged = df[df["fraud_score"] > 0.5]
+                fraud_by_category = (
+                    flagged.groupby("category")["amt"].sum()
+                    .round(2)
+                    .to_dict()
+                )
+
             return {
                 "fraud_rate_pct":  float((df["fraud_score"] > 0.5).mean() * 100),
                 "total_scored":    len(df),
                 "recent_alerts":   alerts[alert_cols].to_dict("records"),
+                "fraud_by_category": fraud_by_category,
             }
         except Exception as exc:
             log.debug("_collect_fraud_metrics: %s", exc)

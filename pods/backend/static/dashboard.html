@@ -682,13 +682,9 @@ function updateDashboard(data) {
     tputLatChart.update('none');
   }
 
-  // Category fraud estimates (proportional to total fraud, weighted by category)
-  const fraudFlagged = biz.fraud_flagged || 0;
-  const highFraudCats = new Set(['shopping_net', 'travel', 'misc_net']);
-  const catData = ALL_CATS.map(c => {
-    const weight = highFraudCats.has(c) ? 3 : 1;
-    return Math.round(fraudFlagged * weight / (ALL_CATS.length + (highFraudCats.size * 2)));
-  });
+  // Category fraud chart: use real per-category amounts from backend
+  const fraudByCat = (data.fraud || {}).fraud_by_category || {};
+  const catData = ALL_CATS.map(c => fraudByCat[c] || 0);
   if (catChart) {
     catChart.data.datasets[0].data = catData;
     catChart.update();
