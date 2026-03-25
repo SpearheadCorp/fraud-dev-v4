@@ -548,14 +548,11 @@ class MetricsCollector:
                 "fraud_flagged": 0, "fraud_rate_pct": 0.0, "fraud_exposure_usd": 0.0,
             }
         
-        # Compute true end-to-end TPS using chunk origination timestamp
-        chunk_ts = float(scoring.get("chunk_ts", 0))
+        # TPS = rows scored in last batch / time that batch took (stable, no decay between batches)
         scoring_rows = int(scoring.get("rows", 0))
-        now = time.time()
-
-        if chunk_ts > 0 and now > chunk_ts:
-            elapsed_e2e = now - chunk_ts
-            prep_rps = int(scoring_rows / elapsed_e2e)
+        scoring_latency_ms = float(scoring.get("latency_ms", 0))
+        if scoring_rows > 0 and scoring_latency_ms > 0:
+            prep_rps = int(scoring_rows / (scoring_latency_ms / 1000))
         else:
             prep_rps = 0
         
