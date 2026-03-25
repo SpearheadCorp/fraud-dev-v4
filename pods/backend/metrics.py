@@ -109,9 +109,15 @@ class MetricsCollector:
                 self.state.total_fraud_exposure_usd = state_data.get("total_fraud_exposure", 0.0)
                 self.state.total_fraud_flagged = state_data.get("total_fraud_flagged", 0)
                 self.state._last_prep_chunk_id = state_data.get("last_chunk_id", -1)
-                # Note: _processed_score_files is not persisted, it will be re-populated by scanning
-                log.info("Loaded state cache (total_rows=%d, fraud_exposure=$%.2f)", 
-                         self.state.total_rows_processed, self.state.total_fraud_exposure_usd)
+                # Mark all existing score files as already processed so restart doesn't double-count
+                if SCORES_PATH.exists():
+                    self.state._processed_score_files = {
+                        f.name for f in SCORES_PATH.glob("*.parquet")
+                        if not f.name.endswith(".processing")
+                    }
+                log.info("Loaded state cache (total_rows=%d, fraud_exposure=$%.2f, skipping %d existing score files)",
+                         self.state.total_rows_processed, self.state.total_fraud_exposure_usd,
+                         len(self.state._processed_score_files))
             
         except Exception as exc:
             log.debug("load_telemetry_cache: %s", exc)
