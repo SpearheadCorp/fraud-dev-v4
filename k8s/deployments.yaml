@@ -298,7 +298,7 @@ spec:
             - name: MODEL_NAME
               value: fraud_gnn_gpu
             - name: WINDOW_CHUNKS
-              value: "10"
+              value: "2"
             - name: TRITON_RETRIES
               value: "30"
           volumeMounts:
