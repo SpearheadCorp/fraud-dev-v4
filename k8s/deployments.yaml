@@ -49,6 +49,8 @@ spec:
               value: /data/scores
             - name: MODEL_REPO_PATH
               value: /data/models
+            - name: FLASHBLADE_API_TOKEN
+              value: T-4c6c371d-2c99-4bb4-80f6-ab5e4879342a
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
