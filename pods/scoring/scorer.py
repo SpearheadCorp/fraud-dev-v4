@@ -250,8 +250,9 @@ def emit_telemetry(chunk_id: int, rows: int, latency_ms: float, fraud_rate: floa
 
 def _claim_files(path: Path, batch: int) -> list:
     """Atomically claim up to `batch` feature files."""
-    files = sorted(f for f in path.glob("*.parquet")
-                   if not f.name.endswith((".processing", ".done")))
+    files = sorted((f for f in path.glob("*.parquet")
+                   if not f.name.endswith((".processing", ".done"))),
+                   key=lambda p: p.stat().st_mtime)
     claimed = []
     for f in files:
         if len(claimed) >= batch:

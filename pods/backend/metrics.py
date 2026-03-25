@@ -342,7 +342,7 @@ class MetricsCollector:
 
     def _collect_fraud_metrics(self) -> dict:
         try:
-            score_files = sorted(SCORES_PATH.glob("*.parquet"))[-10:] \
+            score_files = sorted(SCORES_PATH.glob("*.parquet"), key=lambda p: p.stat().st_mtime)[-10:] \
                           if SCORES_PATH.exists() else []
             if not score_files:
                 return {}

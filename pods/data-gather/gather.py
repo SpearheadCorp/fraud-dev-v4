@@ -130,9 +130,8 @@ _HARDCODED_DEFAULTS: dict = {
 
 def _build_identity_pools() -> tuple:
     """Build fixed cardholder and merchant name pools."""
-    rng = np.random.default_rng(42)
+    rng = np.random.default_rng()
     faker = Faker("en_US")
-    Faker.seed(42)
     cc_num_pool = rng.integers(10**15, 10**16 - 1, NUM_USERS)
     merchant_pool = [
         "fraud_" + faker.company().replace(",", "").replace(" ", "_")[:28]
@@ -244,8 +243,7 @@ def _weighted_choice(cumprobs, rng, n, cp):
 def _build_gpu_pools(dist, cc_num_pool, merchant_pool, cp):
     """Pre-build GPU-resident arrays and string pools for generation."""
     faker = Faker("en_US")
-    Faker.seed(12345)
-    _rng = np.random.default_rng(42)
+    _rng = np.random.default_rng()
 
     # String pools as numpy arrays for fast fancy indexing.
     first_pool = np.array([faker.first_name() for _ in range(500)])
