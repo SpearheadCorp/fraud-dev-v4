@@ -711,7 +711,7 @@ function updateDashboard(data) {
   const fraudByGeo = (data.fraud || {}).fraud_by_geography || {};
   const geoBody = document.getElementById('geo-body');
   if (geoBody) {
-    const states = Object.keys(fraudByGeo);
+    const states = Object.keys(fraudByGeo).slice(0, 10);
     if (states.length === 0) {
       geoBody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:20px">No scored data yet</td></tr>';
     } else {
