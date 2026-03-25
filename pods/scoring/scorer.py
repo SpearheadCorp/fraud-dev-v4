@@ -242,11 +242,12 @@ def score_chunk(
 # ---------------------------------------------------------------------------
 
 def emit_telemetry(chunk_id: int, rows: int, latency_ms: float, fraud_rate: float,
-                   decision_latency_ms: float = 0.0) -> None:
+                   decision_latency_ms: float = 0.0, chunk_ts: float = 0.0) -> None:
     sys.stdout.write(
         f"[TELEMETRY] stage=scoring chunk_id={chunk_id} rows={rows} "
         f"latency_ms={latency_ms:.1f} fraud_rate={fraud_rate:.4f} "
-        f"decision_latency_ms={decision_latency_ms:.0f}\n"
+        f"decision_latency_ms={decision_latency_ms:.0f} "
+        f"chunk_ts={chunk_ts:.3f}\n"
     )
     sys.stdout.flush()
 
@@ -384,7 +385,8 @@ def main() -> None:
         fraud_rate = float((probs > 0.5).mean())
         emit_telemetry(chunk_id=chunk_id, rows=n_rows,
                        latency_ms=total_ms, fraud_rate=fraud_rate,
-                       decision_latency_ms=decision_latency_ms)
+                       decision_latency_ms=decision_latency_ms,
+                       chunk_ts=chunk_ts if chunk_ts else 0.0)
         log.info("batch %06d: %d rows, %.0fms (read=%.1fs feat=%.1fs score=%.1fs write=%.1fs) fraud=%.4f",
                  chunk_id, n_rows, total_ms, t_read, t_feat, t_score, t_write, fraud_rate)
         chunk_id += 1
