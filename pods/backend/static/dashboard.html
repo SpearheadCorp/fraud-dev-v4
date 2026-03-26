@@ -631,7 +631,7 @@ function updateDashboard(data) {
   document.getElementById('kpi-total-amt').textContent = '$' + fmtComma(biz.total_amount_processed_usd || 0);
   const decisionLatMs = biz.decision_latency_ms || 0;
   const dlEl = document.getElementById('kpi-decision-latency');
-  if (dlEl) dlEl.textContent = decisionLatMs > 0 ? fmtComma(Math.round(decisionLatMs)) + ' ms' : '—';
+  if (dlEl) dlEl.textContent = decisionLatMs > 0 ? decisionLatMs.toFixed(3) + ' ms' : '—';
 
   // System KPIs
   const sys = data.system || {};

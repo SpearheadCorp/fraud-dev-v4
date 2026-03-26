@@ -70,9 +70,6 @@ class PipelineState:
         self.total_fraud_flagged: int = 0
         self.total_amount_processed_usd: float = 0.0
         self._last_prep_chunk_id: int = -1
-        self._last_scoring_chunk_id: int = -1
-        self._total_decision_latency_ms: float = 0.0
-        self._decision_latency_count: int = 0
         self._processed_score_files: set[str] = set()
 
     def reset(self) -> None:
@@ -84,9 +81,6 @@ class PipelineState:
         self.total_fraud_flagged = 0
         self.total_amount_processed_usd = 0.0
         self._last_prep_chunk_id = -1
-        self._last_scoring_chunk_id = -1
-        self._total_decision_latency_ms = 0.0
-        self._decision_latency_count = 0
         self._processed_score_files.clear()
 
     @property
@@ -118,9 +112,6 @@ class MetricsCollector:
                 self.state.total_fraud_flagged = state_data.get("total_fraud_flagged", 0)
                 self.state.total_amount_processed_usd = state_data.get("total_amount_processed", 0.0)
                 self.state._last_prep_chunk_id = state_data.get("last_chunk_id", -1)
-                self.state._last_scoring_chunk_id = state_data.get("last_scoring_chunk_id", -1)
-                self.state._total_decision_latency_ms = state_data.get("total_decision_latency_ms", 0.0)
-                self.state._decision_latency_count = state_data.get("decision_latency_count", 0)
                 # Mark all existing score files as already processed so restart doesn't double-count
                 if SCORES_PATH.exists():
                     self.state._processed_score_files = {
@@ -145,9 +136,6 @@ class MetricsCollector:
                 "total_fraud_flagged": self.state.total_fraud_flagged,
                 "total_amount_processed": self.state.total_amount_processed_usd,
                 "last_chunk_id": self.state._last_prep_chunk_id,
-                "last_scoring_chunk_id": self.state._last_scoring_chunk_id,
-                "total_decision_latency_ms": self.state._total_decision_latency_ms,
-                "decision_latency_count": self.state._decision_latency_count,
             }
             _STATE_CACHE.write_text(json.dumps(state_data))
             
@@ -601,15 +589,9 @@ class MetricsCollector:
             # Fallback to cumulative average if no recent telemetry
             display_rate = (fraud_flagged / total_txns) if total_txns > 0 else 0.0
 
-        scoring_chunk_id = int(scoring.get("chunk_id", -1))
-        batch_decision_latency = float(scoring.get("decision_latency_ms", 0))
-        if scoring_chunk_id >= 0 and scoring_chunk_id != self.state._last_scoring_chunk_id and batch_decision_latency > 0:
-            self.state._total_decision_latency_ms += batch_decision_latency
-            self.state._decision_latency_count += 1
-            self.state._last_scoring_chunk_id = scoring_chunk_id
-        avg_decision_latency_ms = (
-            self.state._total_decision_latency_ms / self.state._decision_latency_count
-            if self.state._decision_latency_count > 0 else 0.0
+        decision_latency_ms = (
+            scoring_latency_ms / scoring_rows
+            if scoring_rows > 0 and scoring_latency_ms > 0 else 0.0
         )
 
         return {
@@ -619,7 +601,7 @@ class MetricsCollector:
             "fraud_rate_pct": round(display_rate * 100, 2),
             "fraud_exposure_usd": round(fraud_exposure, 0),
             "total_amount_processed_usd": round(self.state.total_amount_processed_usd, 0),
-            "decision_latency_ms": round(avg_decision_latency_ms, 0),
+            "decision_latency_ms": round(decision_latency_ms, 3),
         }
 
     # ------------------------------------------------------------------
