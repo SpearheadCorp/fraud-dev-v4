@@ -363,9 +363,10 @@ class MetricsCollector:
             if "fraud_score" not in df.columns:
                 return {}
             alerts = (df[df["fraud_score"] > 0.8]
-                      .sort_values("fraud_score", ascending=False)
+                      .sort_values("scored_at", ascending=False)
                       .drop_duplicates(subset=["merchant"])
-                      .head(20))
+                      .head(20)
+                      .sort_values("fraud_score", ascending=False))
             alert_cols = [c for c in ("trans_num", "merchant", "amt", "category", "fraud_score")
                           if c in alerts.columns]
 
