@@ -135,7 +135,7 @@ class MetricsCollector:
                 "total_fraud_exposure": self.state.total_fraud_exposure_usd,
                 "total_fraud_flagged": self.state.total_fraud_flagged,
                 "total_amount_processed": self.state.total_amount_processed_usd,
-                "last_chunk_id": self.state._last_prep_chunk_id
+                "last_chunk_id": self.state._last_prep_chunk_id,
             }
             _STATE_CACHE.write_text(json.dumps(state_data))
             
@@ -589,6 +589,11 @@ class MetricsCollector:
             # Fallback to cumulative average if no recent telemetry
             display_rate = (fraud_flagged / total_txns) if total_txns > 0 else 0.0
 
+        decision_latency_ms = (
+            scoring_latency_ms / scoring_rows
+            if scoring_rows > 0 and scoring_latency_ms > 0 else 0.0
+        )
+
         return {
             "total_transactions": total_txns,
             "prep_rows_per_sec": prep_rps,
@@ -596,6 +601,7 @@ class MetricsCollector:
             "fraud_rate_pct": round(display_rate * 100, 2),
             "fraud_exposure_usd": round(fraud_exposure, 0),
             "total_amount_processed_usd": round(self.state.total_amount_processed_usd, 0),
+            "decision_latency_ms": round(decision_latency_ms, 3),
         }
 
     # ------------------------------------------------------------------

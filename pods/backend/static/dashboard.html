@@ -219,6 +219,11 @@
       <div class="kpi-value" id="kpi-total-amt">$0</div>
       <div class="kpi-sub">transaction volume</div>
     </div>
+    <div class="kpi-card accent">
+      <div class="kpi-label">Decision Latency</div>
+      <div class="kpi-value" id="kpi-decision-latency">—</div>
+      <div class="kpi-sub">time to process a transaction</div>
+    </div>
   </div>
 
   <div class="chart-grid">
@@ -624,6 +629,9 @@ function updateDashboard(data) {
   document.getElementById('kpi-flagged').textContent = fmtComma(biz.fraud_flagged || 0);
   document.getElementById('kpi-fraud-rate').textContent = (biz.fraud_rate_pct || 0).toFixed(2) + '%';
   document.getElementById('kpi-total-amt').textContent = '$' + fmtComma(biz.total_amount_processed_usd || 0);
+  const decisionLatMs = biz.decision_latency_ms || 0;
+  const dlEl = document.getElementById('kpi-decision-latency');
+  if (dlEl) dlEl.textContent = decisionLatMs > 0 ? decisionLatMs.toFixed(3) + ' ms' : '—';
 
   // System KPIs
   const sys = data.system || {};
@@ -1056,6 +1064,8 @@ function _clearDashboard() {
   document.getElementById('kpi-txns').textContent = '0';
   document.getElementById('kpi-flagged').textContent = '0';
   document.getElementById('kpi-fraud-rate').textContent = '0%';
+  const dlResetEl = document.getElementById('kpi-decision-latency');
+  if (dlResetEl) dlResetEl.textContent = '—';
   document.getElementById('kpi-cpu').textContent = '0%';
   const cpuN25El = document.getElementById('kpi-cpu-n25');
   if (cpuN25El) cpuN25El.textContent = '0%';
