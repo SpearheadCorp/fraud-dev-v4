@@ -95,8 +95,8 @@ async def reset_pipeline():
             RAW_PATH, FEATURES_PATH, SCORES_PATH,
         )
     )
-    telemetry_file = MODEL_REPO_PATH / "last_telemetry.json"
-    telemetry_file.unlink(missing_ok=True)
+    (MODEL_REPO_PATH / "last_telemetry.json").unlink(missing_ok=True)
+    (MODEL_REPO_PATH / "pipeline_state.json").unlink(missing_ok=True)
     state.reset()
     return result
 
@@ -211,13 +211,16 @@ async def startup_event():
     # Ensure data directories exist
     for p in (RAW_PATH, FEATURES_PATH, SCORES_PATH):
         p.mkdir(parents=True, exist_ok=True)
-    # Infer is_running from actual K8s deployment states (survives pod restarts)
+    # On (re)start: if any pipeline pods are still running from a previous session,
+    # stop them and wipe saved state rather than resuming with stale counters.
     try:
         service_states = pl.get_service_states()
         if any(s not in ("Stopped", "NotFound") for s in service_states.values()):
-            state.is_running = True
-            state.start_time = state.start_time or time.time()
-            log.info("Inferred is_running=True from K8s deployment states")
+            log.warning("Backend restarted with pipeline pods still running — stopping pipeline and clearing state")
+            pl.stop_pipeline()
+            (MODEL_REPO_PATH / "last_telemetry.json").unlink(missing_ok=True)
+            (MODEL_REPO_PATH / "pipeline_state.json").unlink(missing_ok=True)
     except Exception as exc:
-        log.warning("Could not infer pipeline state from K8s: %s", exc)
+        log.warning("Could not check/stop pipeline state on startup: %s", exc)
+    state.reset()
     log.info("Backend started — dashboard at http://0.0.0.0:8080")
