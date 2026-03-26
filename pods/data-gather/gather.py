@@ -516,14 +516,14 @@ def generate_chunk_gpu(chunk_id, n_rows, seed_offset, gpu_dist, pools, cudf, cp)
     gender_cpu = cp.asnumpy(rng.random_sample(n) < 0.55)
     genders = np.where(gender_cpu, "F", "M")
 
-    # Category-aware merchant selection: pick a random merchant from each
-    # transaction's category pool using the GPU RNG for reproducibility.
-    merch_within_idx = cp.asnumpy(rng.randint(0, 1024, n))  # upper bound > max pool size
+    # Category-aware merchant selection: generate indices directly in each
+    # pool's range (no modulo) to avoid bias clustering on specific merchants.
     merchants = np.empty(n, dtype=object)
     for ci, cat_pool_arr in enumerate(pools["cat_merch"]):
         mask = cat_idx_cpu == ci
-        if mask.any():
-            within = merch_within_idx[mask] % len(cat_pool_arr)
+        count = int(mask.sum())
+        if count > 0:
+            within = cp.asnumpy(rng.randint(0, len(cat_pool_arr), count))
             merchants[mask] = cat_pool_arr[within]
 
     fi = cp.asnumpy(rng.randint(0, len(pools["first"]), n))
