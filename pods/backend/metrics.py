@@ -364,7 +364,9 @@ class MetricsCollector:
                 return {}
             alerts = (df[df["fraud_score"] > 0.8]
                       .sort_values("scored_at", ascending=False)
-                      .head(20))
+                      .drop_duplicates(subset=["merchant"])
+                      .head(20)
+                      .sort_values("fraud_score", ascending=False))
             alert_cols = [c for c in ("trans_num", "merchant", "amt", "category", "fraud_score")
                           if c in alerts.columns]
 
