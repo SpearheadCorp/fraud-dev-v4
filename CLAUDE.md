@@ -19,6 +19,78 @@ Build VM (all image builds happen here): `tduser@10.23.181.247`
 
 ---
 
+## Git Branching Model
+
+### Branch roles
+
+| Branch | Role |
+|--------|------|
+| `main` | Production — always deployable, only branch pushed to remote origin |
+| `dev` | Integration branch for completed feature/bugfix work |
+| `feature/<desc>` | Created off `dev`, merged back to `dev` via PR |
+| `bugfix/<desc>` | Non-urgent fix — created off `dev`, merged back to `dev` via PR |
+| `hotfix/<desc>` | Urgent production fix — created off `main`, merged to `main` via PR, then cherry-picked into `dev` |
+| `release/<version>` | Stabilization branch cut from `dev`, merged into `main` via PR |
+
+### PR rules
+- **All merges are done via GitHub PRs** — never `git merge` locally
+- PRs into `main` require review + CI pass
+- `feature/*` and `bugfix/*` → PR into `dev`
+- `hotfix/*` and `release/*` → PR into `main`, then cherry-pick fix back into `dev`
+- Never delete branches after merge
+
+### Quick reference
+
+**Feature / Bugfix (dev)**
+```bash
+git switch dev
+git switch -c feature/<desc>   # or bugfix/<desc>
+# work & commit
+git push -u origin feature/<desc>
+gh pr create --base dev --head feature/<desc> --title "feat: ..." --body "..."
+```
+
+**Hotfix (production)**
+```bash
+git switch main && git pull origin main
+git switch -c hotfix/<desc>
+# fix & commit
+git push -u origin hotfix/<desc>
+gh pr create --base main --head hotfix/<desc> --title "fix: ..." --body "..."
+# After PR merges — cherry-pick into dev:
+git switch dev
+git cherry-pick <fix-commit-sha>
+```
+
+**Release (dev → main)**
+```bash
+git switch dev
+git switch -c release/<version>
+# stabilize, then:
+git push -u origin release/<version>
+gh pr create --base main --head release/<version> --title "Release <version>" --body "..."
+# After PR merges — cherry-pick release fixes into dev:
+git switch dev
+git cherry-pick <release-fix-shas>
+```
+
+### Commit prefixes
+`feat:` · `fix:` · `chore:` · `refactor:`
+
+### Build VM remote setup
+The build VM (`tduser@10.23.181.247`) has two remotes:
+- `origin` → `https://github.com/SpearheadCorp/fraud-dev-v31.git`
+- `v4` → `https://github.com/SpearheadCorp/fraud-dev-v4.git`
+
+To pull a branch from v4 on the build VM:
+```bash
+git fetch v4 && git checkout -b <branch> v4/<branch>
+# or if branch exists locally:
+git checkout <branch> && git pull v4 <branch>
+```
+
+---
+
 ## Production Deployment (Mac/Linux — `make` available)
 
 ```bash
