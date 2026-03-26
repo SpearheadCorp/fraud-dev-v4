@@ -150,14 +150,15 @@ class MetricsCollector:
         # Skip pod-log telemetry when pipeline is stopped — stale log lines
         # would otherwise repopulate KPIs from the last run's data.
         telemetry  = self._parse_telemetry() if self.state.is_running else {}
-        self._update_fraud_metrics()
+        if self.state.is_running:
+            self._update_fraud_metrics()
         system     = self._collect_system()
         gpu        = self._collect_gpu()
         business   = self._compute_kpis(telemetry)
         storage    = self._collect_storage()
         flashblade = self._collect_flashblade()
         queue      = self._collect_queue_depth()
-        fraud      = self._collect_fraud_metrics()
+        fraud      = self._collect_fraud_metrics() if self.state.is_running else {}
 
         if telemetry:
             self.state.last_telemetry = telemetry
