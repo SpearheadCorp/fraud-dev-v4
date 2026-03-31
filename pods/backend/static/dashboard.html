@@ -630,12 +630,11 @@ function updateDashboard(data) {
   const livenessBadge = document.getElementById('liveness-badge');
   const livenessText  = document.getElementById('liveness-text');
   if (livenessBadge) {
-    livenessBadge.style.display = 'flex';
     if (data.liveness) {
-      livenessBadge.classList.remove('degraded');
+      livenessBadge.className = 'live-badge';
       livenessText.textContent = 'LIVE';
     } else {
-      livenessBadge.classList.add('degraded');
+      livenessBadge.className = 'live-badge degraded';
       livenessText.textContent = isRunning ? 'STARTING' : 'OFFLINE';
     }
   }
