@@ -127,6 +127,12 @@ def get_service_states() -> dict:
     return states
 
 
+def get_liveness() -> bool:
+    """Return True only when all 4 pipeline pods are Ready (readiness probe passing)."""
+    states = get_service_states()
+    return all(states.get(dep) == "Ready" for dep in PIPELINE_REPLICAS)
+
+
 def get_replica_counts() -> dict:
     """Return {name: {desired, ready}} for all pipeline Deployments."""
     _, apps_v1, _ = _k8s()

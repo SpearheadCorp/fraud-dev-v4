@@ -30,6 +30,7 @@ RAW_PATH          = Path(os.environ.get("OUTPUT_PATH",       "/data/raw"))
 FEATURES_PATH     = Path(os.environ.get("FEATURES_PATH",    "/data/features"))
 SCORES_PATH       = Path(os.environ.get("SCORES_PATH",      "/data/scores"))
 MODEL_REPO_PATH   = Path(os.environ.get("MODEL_REPO_PATH",  "/data/models"))
+ENV_LABEL         = "DEV" if "dev" in pl.NAMESPACE else "PROD"
 STATIC_DIR = Path(__file__).parent / "static"
 
 # ---------------------------------------------------------------------------
@@ -65,6 +66,8 @@ async def get_status():
         "elapsed_sec": state.elapsed_sec,
         "services":    service_states,
         "replicas":    replicas,
+        "liveness":    pl.get_liveness(),
+        "env":         ENV_LABEL,
     }
 
 
@@ -175,6 +178,9 @@ async def dashboard_ws(websocket: WebSocket):
                 if tick % 10 == 0:
                     # Full collection every 10th tick (2s): pod logs, NFS globs, fraud metrics
                     _last_full = await loop.run_in_executor(None, collector.collect)
+                    _last_full["pods"]     = await loop.run_in_executor(None, pl.get_service_states)
+                    _last_full["liveness"] = await loop.run_in_executor(None, pl.get_liveness)
+                    _last_full["env"]      = ENV_LABEL
                     payload = _last_full
                 else:
                     # Fast path (200ms): GPU, CPU, FlashBlade only — merge into last full
