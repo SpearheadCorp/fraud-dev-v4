@@ -64,6 +64,7 @@ class PipelineState:
     def __init__(self) -> None:
         self.is_running: bool = False
         self.start_time: Optional[float] = None
+        self.stop_time:  Optional[float] = None
         self.last_telemetry: dict = {}
         self.total_rows_processed: int = 0
         self.total_fraud_exposure_usd: float = 0.0
@@ -75,6 +76,7 @@ class PipelineState:
     def reset(self) -> None:
         self.is_running = False
         self.start_time = None
+        self.stop_time  = None
         self.last_telemetry = {}
         self.total_rows_processed = 0
         self.total_fraud_exposure_usd = 0.0
@@ -87,7 +89,8 @@ class PipelineState:
     def elapsed_sec(self) -> int:
         if self.start_time is None:
             return 0
-        return int(time.time() - self.start_time)
+        end = self.stop_time if self.stop_time else time.time()
+        return int(end - self.start_time)
 
 
 _TELEMETRY_CACHE = MODEL_REPO / "last_telemetry.json"

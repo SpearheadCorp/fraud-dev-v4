@@ -66,7 +66,7 @@ async def get_status():
         "elapsed_sec": state.elapsed_sec,
         "services":    service_states,
         "replicas":    replicas,
-        "liveness":    pl.get_liveness(),
+        "health":      pl.get_health_status(),
         "env":         ENV_LABEL,
     }
 
@@ -77,6 +77,7 @@ async def start_pipeline():
         return {"status": "already_running", "message": "Pipeline is already running"}
     state.is_running = True
     state.start_time = time.time()
+    state.stop_time  = None
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, pl.start_pipeline)
     return {"status": "started", "message": "Deployments scaled up"}
@@ -87,6 +88,7 @@ async def stop_pipeline():
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, pl.stop_pipeline)
     state.is_running = False
+    state.stop_time  = time.time()
     return result
 
 
@@ -178,9 +180,8 @@ async def dashboard_ws(websocket: WebSocket):
                 if tick % 10 == 0:
                     # Full collection every 10th tick (2s): pod logs, NFS globs, fraud metrics
                     _last_full = await loop.run_in_executor(None, collector.collect)
-                    _last_full["pods"]     = await loop.run_in_executor(None, pl.get_service_states)
-                    _last_full["liveness"] = await loop.run_in_executor(None, pl.get_liveness)
-                    _last_full["env"]      = ENV_LABEL
+                    _last_full["health"] = await loop.run_in_executor(None, pl.get_health_status)
+                    _last_full["env"]    = ENV_LABEL
                     payload = _last_full
                 else:
                     # Fast path (200ms): GPU, CPU, FlashBlade only — merge into last full
