@@ -35,8 +35,18 @@
     color: var(--green); background: rgba(63, 185, 80, 0.1);
     padding: 2px 8px; border-radius: 20px; border: 1px solid rgba(63,185,80,0.3);
   }
+  .live-badge.degraded {
+    color: #f85149; background: rgba(248,81,73,0.1); border-color: rgba(248,81,73,0.3);
+  }
   .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+  .live-badge.degraded .live-dot { background: #f85149; animation: none; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .env-badge {
+    font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px;
+    letter-spacing: 0.06em;
+  }
+  .env-badge.dev  { color: #e3b341; background: rgba(227,179,65,0.12); border: 1px solid rgba(227,179,65,0.35); }
+  .env-badge.prod { color: #58a6ff; background: rgba(88,166,255,0.12); border: 1px solid rgba(88,166,255,0.35); }
   .elapsed { color: var(--text-muted); font-size: 12px; }
   .header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
@@ -149,10 +159,8 @@
   .risk-high { color: var(--red); font-weight: 700; }
   .risk-med { color: var(--orange); }
 
-  /* Connection status */
-  #conn-status { font-size: 11px; color: var(--text-muted); }
-  #conn-status.connected { color: var(--green); }
-  #conn-status.disconnected { color: var(--red); }
+  .live-badge.connecting { color: var(--text-muted); background: rgba(139,148,158,0.1); border-color: rgba(139,148,158,0.3); }
+  .live-badge.connecting .live-dot { background: var(--text-muted); animation: none; }
 
   @media (max-width: 640px) {
     .chart-grid { grid-template-columns: 1fr; }
@@ -163,9 +171,9 @@
 
 <header>
   <h1>Fraud Detection Demo v4 — GNN + XGBoost</h1>
-  <div class="live-badge"><div class="live-dot"></div>LIVE</div>
+  <span id="env-badge" class="env-badge">—</span>
+  <div id="liveness-badge" class="live-badge connecting"><div class="live-dot"></div><span id="liveness-text">Connecting...</span></div>
   <span class="elapsed" id="elapsed">00:00:00 elapsed</span>
-  <span id="conn-status" class="disconnected">● Connecting...</span>
   <div class="header-right">
     <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
     <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
@@ -362,20 +370,22 @@
     <div class="kpi-card good">
       <div class="kpi-label">F1 Score</div>
       <div class="kpi-value" id="kpi-f1">—</div>
-      <div class="kpi-sub">GPU model</div>
+      <div class="kpi-sub">Overall Model Reliability</div>
     </div>
     <div class="kpi-card accent">
       <div class="kpi-label">AUC-PR</div>
       <div class="kpi-value" id="kpi-auc-pr">—</div>
-      <div class="kpi-sub">area under PR curve</div>
+      <div class="kpi-sub">Model Quality Score</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Precision</div>
       <div class="kpi-value" id="kpi-prec">—</div>
+      <div class="kpi-sub">How often a "fraud" alert is actually fraud</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Recall</div>
       <div class="kpi-value" id="kpi-recall">—</div>
+      <div class="kpi-sub">% of actual fraud we successfully flagged</div>
     </div>
   </div>
 
@@ -576,8 +586,6 @@ function connectWS() {
   ws.onopen = () => {
     wsConnected = true;
     wsReconnectDelay = 2000;
-    document.getElementById('conn-status').textContent = '● Connected';
-    document.getElementById('conn-status').className = 'connected';
   };
 
   ws.onmessage = (event) => {
@@ -586,8 +594,9 @@ function connectWS() {
 
   ws.onclose = () => {
     wsConnected = false;
-    document.getElementById('conn-status').textContent = '● Disconnected';
-    document.getElementById('conn-status').className = 'disconnected';
+    const b = document.getElementById('liveness-badge');
+    const t = document.getElementById('liveness-text');
+    if (b && t) { b.className = 'live-badge degraded'; t.textContent = 'Disconnected'; }
     setTimeout(connectWS, wsReconnectDelay);
     wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
   };
@@ -610,10 +619,24 @@ function updateDashboard(data) {
   document.getElementById('stop-btn').disabled = !isRunning;
   if (!isRunning) stopPodPolling();
 
-  // LIVE badge visibility
-  const liveBadge = document.querySelector('.live-badge');
-  if (liveBadge) {
-    liveBadge.style.display = isRunning ? 'flex' : 'none';
+  // Env badge
+  const envBadge = document.getElementById('env-badge');
+  if (envBadge && data.env) {
+    envBadge.textContent = data.env;
+    envBadge.className = 'env-badge ' + data.env.toLowerCase();
+  }
+
+  // Liveness badge — shown always; green=all pods Ready, red=degraded
+  const livenessBadge = document.getElementById('liveness-badge');
+  const livenessText  = document.getElementById('liveness-text');
+  if (livenessBadge) {
+    if (data.liveness) {
+      livenessBadge.className = 'live-badge';
+      livenessText.textContent = 'LIVE';
+    } else {
+      livenessBadge.className = 'live-badge degraded';
+      livenessText.textContent = isRunning ? 'STARTING' : 'OFFLINE';
+    }
   }
 
   // Elapsed
@@ -747,8 +770,8 @@ function updateDashboard(data) {
   // Model metrics from telemetry
   const train = (data.pipeline || {}).train || {};
   if (train.f1) {
-    document.getElementById('kpi-f1').textContent = train.f1.toFixed(3);
-    document.getElementById('kpi-auc-pr').textContent = (train.auc_pr || 0).toFixed(3);
+    document.getElementById('kpi-f1').textContent = (train.f1 * 100).toFixed(1) + '%';
+    document.getElementById('kpi-auc-pr').textContent = ((train.auc_pr || 0) * 100).toFixed(1) + '%';
   }
 
   // Flow stats (Tab 3)
@@ -884,10 +907,10 @@ async function loadTrainingMetrics() {
     clearTimeout(timer);
     if (!resp.ok) return;
     const m = await resp.json();
-    if (m.f1 !== undefined) document.getElementById('kpi-f1').textContent = m.f1.toFixed(3);
-    if (m.auc_pr !== undefined) document.getElementById('kpi-auc-pr').textContent = m.auc_pr.toFixed(3);
-    if (m.precision !== undefined) document.getElementById('kpi-prec').textContent = m.precision.toFixed(3);
-    if (m.recall !== undefined) document.getElementById('kpi-recall').textContent = m.recall.toFixed(3);
+    if (m.f1 !== undefined) document.getElementById('kpi-f1').textContent = (m.f1 * 100).toFixed(1) + '%';
+    if (m.auc_pr !== undefined) document.getElementById('kpi-auc-pr').textContent = (m.auc_pr * 100).toFixed(1) + '%';
+    if (m.precision !== undefined) document.getElementById('kpi-prec').textContent = (m.precision * 100).toFixed(1) + '%';
+    if (m.recall !== undefined) document.getElementById('kpi-recall').textContent = (m.recall * 100).toFixed(1) + '%';
   } catch (e) { /* silent */ }
 }
 
