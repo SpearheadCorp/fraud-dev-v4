@@ -264,22 +264,22 @@
 <div id="tab-infra" class="tab-pane">
   <div class="kpi-row">
     <div class="kpi-card accent">
-      <div class="kpi-label">GPU n29-0 <span style="font-size:9px;color:var(--text-muted)">.44</span></div>
+      <div class="kpi-label">Generate <span style="font-size:9px;color:var(--text-muted)">n29-0 .44</span></div>
       <div class="kpi-value" id="kpi-gpu-n29-0">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n29-0-mem">0% mem</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">GPU n29-1 <span style="font-size:9px;color:var(--text-muted)">.44</span></div>
+      <div class="kpi-label">Score <span style="font-size:9px;color:var(--text-muted)">n29-1 .44</span></div>
       <div class="kpi-value" id="kpi-gpu-n29-1">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n29-1-mem">0% mem</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">GPU n25-0 <span style="font-size:9px;color:var(--text-muted)">.40</span></div>
+      <div class="kpi-label">Prep <span style="font-size:9px;color:var(--text-muted)">n25-0 .40</span></div>
       <div class="kpi-value" id="kpi-gpu-n25-0">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n25-0-mem">0% mem</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">GPU n25-1 <span style="font-size:9px;color:var(--text-muted)">.40</span></div>
+      <div class="kpi-label">Training <span style="font-size:9px;color:var(--text-muted)">n25-1 .40</span></div>
       <div class="kpi-value" id="kpi-gpu-n25-1">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n25-1-mem">0% mem</div>
     </div>
@@ -311,12 +311,12 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="chart-title" style="margin:0">GPU Engine Active / CPU Utilization <span style="font-size:10px;color:var(--text-muted)">(1s DCGM profiling)</span></div>
         <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">n29-0</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#9d6dd8">n29-1</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,2)"><span style="color:#f0883e">n25-0</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#d2691e">n25-1</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,4)"><span style="color:#58a6ff">CPU .44</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,5)"><span style="color:#39d353">CPU .40</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">Generate</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#9d6dd8">Score</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,2)"><span style="color:#f0883e">Prep</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#d2691e">Training</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" onchange="toggleChartLine(utilChart,4)"><span style="color:#58a6ff">CPU .44</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" onchange="toggleChartLine(utilChart,5)"><span style="color:#39d353">CPU .40</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,6)"><span style="color:#e3b341">FB ms</span></label>
         </div>
       </div>
@@ -505,12 +505,12 @@ function makeUtilChart() {
     data: {
       labels: [],
       datasets: [
-        { label: 'GPU n29-0', data: [], borderColor: '#bc8cff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'GPU n29-1', data: [], borderColor: '#9d6dd8', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'GPU n25-0', data: [], borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'GPU n25-1', data: [], borderColor: '#d2691e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'CPU .44',   data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'CPU .40',   data: [], borderColor: '#39d353', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Generate', data: [], borderColor: '#bc8cff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Score',    data: [], borderColor: '#9d6dd8', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Prep',     data: [], borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Training', data: [], borderColor: '#d2691e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'CPU .44',  data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y', hidden: true },
+        { label: 'CPU .40',  data: [], borderColor: '#39d353', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y', hidden: true },
         { label: 'FB ms',     data: [], borderColor: '#e3b341', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, borderDash: [4,2], yAxisID: 'yFb' },
       ]
     },
