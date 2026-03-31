@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Fraud Detection Demo v4</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/numeral@2.0.6/numeral.min.js"></script>
 <style>
   :root {
     --bg: #0d1117;
@@ -543,7 +544,7 @@ function makeTputLatChart() {
       plugins: { legend: { display: false } },
       scales: {
         x:   { display: false },
-        y:   { position: 'left', min: 0, suggestedMax: 50000, ticks: { color: '#3fb950', font: { size: 10 }, callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? Math.round(v/1000).toLocaleString()+'K' : v }, grid: { color: 'rgba(48,54,61,0.3)' }, title: { display: true, text: 'rows/s', color: '#3fb950', font: { size: 10 } } },
+        y:   { position: 'left', min: 0, suggestedMax: 50000, ticks: { color: '#3fb950', font: { size: 10 }, callback: v => numeral(v).format('0.[0]a').toUpperCase() }, grid: { color: 'rgba(48,54,61,0.3)' }, title: { display: true, text: 'rows/s', color: '#3fb950', font: { size: 10 } } },
         yFb: { position: 'right', min: 0, suggestedMax: 10, ticks: { color: '#e3b341', font: { size: 10 }, callback: v => v.toFixed(1)+'ms' }, grid: { display: false }, title: { display: true, text: 'FB ms', color: '#e3b341', font: { size: 10 } } },
       }
     }
@@ -624,11 +625,11 @@ function updateDashboard(data) {
 
   // Business KPIs
   const biz = data.business || {};
-  document.getElementById('kpi-exposure').textContent = '$' + fmtComma(biz.fraud_exposure_usd || 0);
-  document.getElementById('kpi-txns').textContent = fmtComma(biz.total_transactions || 0);
-  document.getElementById('kpi-flagged').textContent = fmtComma(biz.fraud_flagged || 0);
+  document.getElementById('kpi-exposure').textContent = fmtDollar(biz.fraud_exposure_usd || 0);
+  document.getElementById('kpi-txns').textContent = fmtNum(biz.total_transactions || 0);
+  document.getElementById('kpi-flagged').textContent = fmtNum(biz.fraud_flagged || 0);
   document.getElementById('kpi-fraud-rate').textContent = (biz.fraud_rate_pct || 0).toFixed(2) + '%';
-  document.getElementById('kpi-total-amt').textContent = '$' + fmtComma(biz.total_amount_processed_usd || 0);
+  document.getElementById('kpi-total-amt').textContent = fmtDollar(biz.total_amount_processed_usd || 0);
   const decisionLatMs = biz.decision_latency_ms || 0;
   const dlEl = document.getElementById('kpi-decision-latency');
   if (dlEl) dlEl.textContent = decisionLatMs > 0 ? decisionLatMs.toFixed(3) + ' ms' : '—';
@@ -659,7 +660,7 @@ function updateDashboard(data) {
   // Volume processed (infra tab)
   const totalTx = biz.total_transactions || 0;
   document.getElementById('kpi-vol').textContent = fmtNum(totalTx);
-  document.getElementById('kpi-vol-sub').textContent = fmtComma(totalTx) + ' transactions';
+  document.getElementById('kpi-vol-sub').textContent = fmtNum(totalTx) + ' transactions';
 
   // Throughput (prep processing rate)
   const fb = data.flashblade || {};
@@ -724,7 +725,7 @@ function updateDashboard(data) {
       geoBody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:20px">No scored data yet</td></tr>';
     } else {
       geoBody.innerHTML = states.map((st, i) =>
-        `<tr><td>${st}</td><td>$${fmtComma(fraudByGeo[st])}</td></tr>`
+        `<tr><td>${st}</td><td>${fmtDollar(fraudByGeo[st])}</td></tr>`
       ).join('');
     }
   }
@@ -740,7 +741,7 @@ function updateDashboard(data) {
   if (qEl('q-feat')) qEl('q-feat').textContent = fmtQueue(queue.features);
   if (qEl('q-vol')) {
     const rps = biz.prep_rows_per_sec || 0;
-    qEl('q-vol').textContent = `${fmtComma(totalTx)} TX processed \u2022 ${fmtComma(rps)} rows/sec`;
+    qEl('q-vol').textContent = `${fmtNum(totalTx)} TX processed \u2022 ${fmtNum(rps)} rows/sec`;
   }
 
   // Model metrics from telemetry
@@ -906,13 +907,15 @@ function updateLineChart(chart, labels, data) {
 }
 
 function fmtNum(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return String(Math.round(n));
+  if (!n || isNaN(n)) return '0';
+  return numeral(n).format('0.[0]a').toUpperCase();
+}
+function fmtDollar(n) {
+  if (!n || isNaN(n)) return '$0';
+  return numeral(n).format('$0.[0]a').toUpperCase();
 }
 function fmtComma(n) {
-  return Math.round(n).toLocaleString();
+  return numeral(Math.round(n || 0)).format('0,0');
 }
 
 // ---------------------------------------------------------------------------
