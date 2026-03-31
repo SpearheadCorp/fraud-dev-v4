@@ -362,20 +362,22 @@
     <div class="kpi-card good">
       <div class="kpi-label">F1 Score</div>
       <div class="kpi-value" id="kpi-f1">—</div>
-      <div class="kpi-sub">GPU model</div>
+      <div class="kpi-sub">Overall Model Reliability</div>
     </div>
     <div class="kpi-card accent">
       <div class="kpi-label">AUC-PR</div>
       <div class="kpi-value" id="kpi-auc-pr">—</div>
-      <div class="kpi-sub">area under PR curve</div>
+      <div class="kpi-sub">Model Quality Score</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Precision</div>
       <div class="kpi-value" id="kpi-prec">—</div>
+      <div class="kpi-sub">How often a "fraud" alert is actually fraud</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Recall</div>
       <div class="kpi-value" id="kpi-recall">—</div>
+      <div class="kpi-sub">% of actual fraud we successfully flagged</div>
     </div>
   </div>
 
@@ -747,8 +749,8 @@ function updateDashboard(data) {
   // Model metrics from telemetry
   const train = (data.pipeline || {}).train || {};
   if (train.f1) {
-    document.getElementById('kpi-f1').textContent = train.f1.toFixed(3);
-    document.getElementById('kpi-auc-pr').textContent = (train.auc_pr || 0).toFixed(3);
+    document.getElementById('kpi-f1').textContent = (train.f1 * 100).toFixed(1) + '%';
+    document.getElementById('kpi-auc-pr').textContent = ((train.auc_pr || 0) * 100).toFixed(1) + '%';
   }
 
   // Flow stats (Tab 3)
@@ -884,10 +886,10 @@ async function loadTrainingMetrics() {
     clearTimeout(timer);
     if (!resp.ok) return;
     const m = await resp.json();
-    if (m.f1 !== undefined) document.getElementById('kpi-f1').textContent = m.f1.toFixed(3);
-    if (m.auc_pr !== undefined) document.getElementById('kpi-auc-pr').textContent = m.auc_pr.toFixed(3);
-    if (m.precision !== undefined) document.getElementById('kpi-prec').textContent = m.precision.toFixed(3);
-    if (m.recall !== undefined) document.getElementById('kpi-recall').textContent = m.recall.toFixed(3);
+    if (m.f1 !== undefined) document.getElementById('kpi-f1').textContent = (m.f1 * 100).toFixed(1) + '%';
+    if (m.auc_pr !== undefined) document.getElementById('kpi-auc-pr').textContent = (m.auc_pr * 100).toFixed(1) + '%';
+    if (m.precision !== undefined) document.getElementById('kpi-prec').textContent = (m.precision * 100).toFixed(1) + '%';
+    if (m.recall !== undefined) document.getElementById('kpi-recall').textContent = (m.recall * 100).toFixed(1) + '%';
   } catch (e) { /* silent */ }
 }
 
