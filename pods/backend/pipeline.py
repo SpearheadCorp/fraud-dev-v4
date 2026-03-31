@@ -169,6 +169,8 @@ def get_health_status() -> str:
     pipeline_states = [states.get(dep, "Stopped") for dep in PIPELINE_REPLICAS]
     if all(s == "Ready" for s in pipeline_states):
         return "Live"
+    if all(s == "Stopped" for s in pipeline_states):
+        return "Offline"
     if any(s in _ERROR_STATES for s in pipeline_states):
         return "Error"
     return "Starting"

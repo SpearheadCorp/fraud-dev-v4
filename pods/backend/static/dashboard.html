@@ -172,7 +172,7 @@
 <header>
   <h1>Fraud Detection Demo v4 — GNN + XGBoost</h1>
   <div id="liveness-badge" class="live-badge connecting"><div class="live-dot"></div><span id="liveness-text">Connecting...</span></div>
-  <span class="elapsed"><span id="elapsed">00:00:00</span> elapsed <span id="env-inline" style="font-weight:700"></span></span>
+  <span class="elapsed"><span id="elapsed">00:00:00</span> elapsed <span id="env-inline"></span></span>
   <div class="header-right">
     <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
     <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
@@ -622,14 +622,13 @@ function updateDashboard(data) {
   const envInline = document.getElementById('env-inline');
   if (envInline && data.env) {
     envInline.textContent = '(' + data.env + ')';
-    envInline.style.color = data.env === 'DEV' ? '#e3b341' : '#58a6ff';
   }
 
   // Liveness badge — shown always; green=all pods Ready, red=degraded
   const livenessBadge = document.getElementById('liveness-badge');
   const livenessText  = document.getElementById('liveness-text');
   if (livenessBadge) {
-    const health = data.health || (isRunning ? 'Starting' : 'Offline');
+    const health = data.health || 'Offline';
     if (health === 'Live') {
       livenessBadge.className = 'live-badge';
       livenessText.textContent = 'LIVE';
@@ -640,7 +639,7 @@ function updateDashboard(data) {
       livenessBadge.className = 'live-badge error';
       livenessText.textContent = 'ERROR';
     } else {
-      livenessBadge.className = 'live-badge error';
+      livenessBadge.className = 'live-badge connecting';
       livenessText.textContent = 'OFFLINE';
     }
   }
