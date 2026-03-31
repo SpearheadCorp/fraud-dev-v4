@@ -107,9 +107,45 @@ def reset_pipeline(raw_path: Path, *output_paths: Path) -> dict:
     return {"status": "reset", "requeued_raw": requeued, "cleared": cleared}
 
 
+_ERROR_REASONS = {
+    "OOMKilled", "CrashLoopBackOff", "Error",
+    "ErrImagePull", "ImagePullBackOff",
+    "CreateContainerConfigError", "InvalidImageName",
+}
+_ERROR_STATES = {"OOMKilled", "CrashLoop", "Error", "Terminating", "NotFound"}
+
+
+def _pod_level_state(core_v1: client.CoreV1Api, dep: str) -> str:
+    """Inspect pod container statuses to distinguish Pending/Starting/error states."""
+    try:
+        pods = core_v1.list_namespaced_pod(
+            namespace=NAMESPACE, label_selector=f"app={dep}"
+        )
+    except ApiException:
+        return "Error"
+    for pod in pods.items:
+        if pod.metadata.deletion_timestamp:
+            return "Terminating"
+        phase = (pod.status.phase or "") if pod.status else ""
+        if phase == "Failed":
+            return "Error"
+        if phase == "Pending":
+            return "Pending"
+        for cs in (pod.status.container_statuses or []):
+            waiting    = cs.state.waiting    if cs.state else None
+            terminated = cs.state.terminated if cs.state else None
+            if waiting and waiting.reason in _ERROR_REASONS:
+                if waiting.reason == "OOMKilled":         return "OOMKilled"
+                if waiting.reason == "CrashLoopBackOff":  return "CrashLoop"
+                return "Error"
+            if terminated and terminated.reason in {"OOMKilled", "Error"}:
+                return terminated.reason
+    return "Starting"
+
+
 def get_service_states() -> dict:
-    """Return status of all pipeline Deployments."""
-    _, apps_v1, _ = _k8s()
+    """Return per-deployment status with pod-level error detail when not Ready."""
+    _, apps_v1, core_v1 = _k8s()
     states: dict = {}
     for dep in ALL_DEPLOYMENTS:
         try:
@@ -121,16 +157,23 @@ def get_service_states() -> dict:
             elif ready >= desired:
                 states[dep] = "Ready"
             else:
-                states[dep] = "Scaling"
+                states[dep] = _pod_level_state(core_v1, dep)
         except ApiException:
             states[dep] = "NotFound"
     return states
 
 
-def get_liveness() -> bool:
-    """Return True only when all 4 pipeline pods are Ready (readiness probe passing)."""
+def get_health_status() -> str:
+    """Return overall pipeline health: 'Live', 'Starting', or 'Error'."""
     states = get_service_states()
-    return all(states.get(dep) == "Ready" for dep in PIPELINE_REPLICAS)
+    pipeline_states = [states.get(dep, "Stopped") for dep in PIPELINE_REPLICAS]
+    if all(s == "Ready" for s in pipeline_states):
+        return "Live"
+    if all(s == "Stopped" for s in pipeline_states):
+        return "Offline"
+    if any(s in _ERROR_STATES for s in pipeline_states):
+        return "Error"
+    return "Starting"
 
 
 def get_replica_counts() -> dict:
