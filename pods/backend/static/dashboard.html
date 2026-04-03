@@ -170,10 +170,12 @@
 <body>
 
 <header>
-  <h1>Fraud Detection Demo v4 — GNN + XGBoost</h1>
+  <img id="logo-customer" alt="" style="height:32px;display:none;margin-right:12px;object-fit:contain">
+  <h1 id="page-title">Fraud Detection Demo v4 — GNN + XGBoost</h1>
   <div id="liveness-badge" class="live-badge connecting"><div class="live-dot"></div><span id="liveness-text">Connecting...</span></div>
   <span class="elapsed"><span id="elapsed">00:00:00</span> elapsed <span id="env-inline"></span></span>
   <div class="header-right">
+    <img id="logo-nvidia" alt="" style="height:22px;display:none;margin-right:12px;object-fit:contain">
     <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
     <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
     <button class="btn-secondary" id="reset-btn" onclick="resetPipeline()">↺ Reset</button>
@@ -1243,9 +1245,47 @@ function renderPodStatus(services, isRunning) {
 }
 
 // ---------------------------------------------------------------------------
+// Config-driven title & logos
+// ---------------------------------------------------------------------------
+let DEMO_CONFIG = {};
+async function loadDemoConfig() {
+  try {
+    const r = await fetch('/static/demo_config.json').catch(() => fetch('demo_config.json'));
+    if (!r.ok) return;
+    DEMO_CONFIG = await r.json();
+
+    // Title
+    const title = document.getElementById('page-title');
+    if (title && DEMO_CONFIG.title) title.textContent = DEMO_CONFIG.title;
+
+    // Customer logo (left of title)
+    const lc = document.getElementById('logo-customer');
+    const lc_cfg = DEMO_CONFIG.logos && DEMO_CONFIG.logos.customer;
+    if (lc && lc_cfg) {
+      lc.src    = lc_cfg.src;
+      lc.alt    = lc_cfg.alt || '';
+      lc.style.height  = (lc_cfg.height || '32') + 'px';
+      lc.style.display = 'block';
+    }
+
+    // NVIDIA logo (inside header-right, before buttons)
+    const ln = document.getElementById('logo-nvidia');
+    const ln_cfg = DEMO_CONFIG.logos && DEMO_CONFIG.logos.nvidia;
+    if (ln && ln_cfg) {
+      ln.src    = ln_cfg.src;
+      ln.alt    = ln_cfg.alt || '';
+      ln.style.height  = (ln_cfg.height || '22') + 'px';
+      ln.style.display = 'block';
+    }
+  } catch(e) {
+    console.warn('demo_config.json not available, using defaults');
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-connectWS();
+loadDemoConfig().then(() => connectWS());
 setInterval(() => { if (modelTabOpened && shapLoaded) loadTrainingMetrics(); }, 60000);
 </script>
 </body>
