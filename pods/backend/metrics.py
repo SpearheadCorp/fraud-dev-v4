@@ -28,6 +28,16 @@ SCORES_PATH       = Path(os.environ.get("SCORES_PATH",        "/data/scores"))
 NAMESPACE         = os.environ.get("K8S_NAMESPACE",           "fraud-det-v31")
 FLASHBLADE_FS_NAME = os.environ.get("FLASHBLADE_FS_NAME",    "financial-fraud-detection-demo")
 FLASHBLADE_MGMT_IP = os.environ.get("FLASHBLADE_MGMT_IP",    "10.23.181.60")
+
+
+def _load_gpu_window() -> int:
+    """Read gpu_util_window_s from demo_config.json (ConfigMap-mounted at runtime).
+    Falls back to 30s if the file is missing or the key is absent."""
+    cfg_path = Path(__file__).parent / "static" / "demo_config.json"
+    try:
+        return int(json.loads(cfg_path.read_text()).get("gpu_util_window_s", 30))
+    except Exception:
+        return 30
 FLASHBLADE_API_TOKEN = os.environ.get("FLASHBLADE_API_TOKEN", "")  # Set via K8s Secret or env var
 NFS_NODE_INSTANCE  = os.environ.get("NFS_NODE_INSTANCE",      "10.23.181.44:9100")
 
@@ -105,6 +115,7 @@ class MetricsCollector:
         self._fraud_cache_at: float = 0.0
         self._fraud_cache_lock = threading.Lock()
         self._FRAUD_CACHE_TTL = 5.0  # seconds — force recompute even if same files visible
+        self._gpu_window: int = _load_gpu_window()
         self._load_telemetry_cache()
 
     def _load_telemetry_cache(self) -> None:
@@ -189,6 +200,7 @@ class MetricsCollector:
             "flashblade": flashblade,
             "system":    system,
             "gpu":       gpu,
+            "gpu_window_s": self._gpu_window,
         }
 
     def collect_fast(self) -> dict:
@@ -206,6 +218,7 @@ class MetricsCollector:
             "timestamp":   time.time(),
             "system":    system,
             "gpu":       gpu,
+            "gpu_window_s": self._gpu_window,
             "flashblade": flashblade,
             "fraud":     fraud,
         }
@@ -490,17 +503,28 @@ class MetricsCollector:
     def _collect_gpu(self) -> dict:
         """Query DCGM GPU metrics for all GPU nodes (both .44 and .40).
 
-        Uses DCGM_FI_PROF_GR_ENGINE_ACTIVE (1s profiling metric, 0-1 range)
-        instead of DCGM_FI_DEV_GPU_UTIL (30s averaged %).  This shows actual
-        GPU engine activity spikes (e.g. 99% during mega-batch kernels).
+        Uses max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[Xs]) so tiles show
+        the peak GPU activity over the last X seconds (configurable via
+        gpu_util_window_s in demo_config.json, default 30s) rather than an
+        instant snapshot that reads 0% between mega-batch kernel bursts.
+
+        Falls back to DCGM_FI_DEV_GPU_UTIL if the profiling metric is not
+        exported by this cluster's DCGM configuration.
         """
         try:
             metrics: dict = {}
+            window = f"{self._gpu_window}s"
             for metric_name, key_prefix, scale in [
-                ("DCGM_FI_PROF_GR_ENGINE_ACTIVE", "gpu_{host}_{gpu}_util_pct", 100.0),
-                ("DCGM_FI_DEV_MEM_COPY_UTIL",     "gpu_{host}_{gpu}_mem_pct",  1.0),
+                (f"max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[{window}])", "gpu_{host}_{gpu}_util_pct", 100.0),
+                (f"max_over_time(DCGM_FI_DEV_GPU_UTIL[{window}])",          "gpu_{host}_{gpu}_util_pct", 1.0),
+                (f"max_over_time(DCGM_FI_DEV_MEM_COPY_UTIL[{window}])",     "gpu_{host}_{gpu}_mem_pct",  1.0),
             ]:
-                # No hostname filter — get all GPUs across all nodes
+                # Skip DCGM_FI_DEV_GPU_UTIL fallback if profiling metric already populated util keys
+                if "DCGM_FI_DEV_GPU_UTIL" in metric_name:
+                    if any(k.endswith("_util_pct") for k in metrics):
+                        continue
+                    log.warning("_collect_gpu: profiling metric returned no results, falling back to DCGM_FI_DEV_GPU_UTIL (window=%s)", window)
+
                 resp = requests.get(
                     f"{PROMETHEUS_URL}/api/v1/query",
                     params={"query": metric_name}, timeout=3,
@@ -513,9 +537,12 @@ class MetricsCollector:
                     short = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
                     key = key_prefix.format(host=short, gpu=gpu_id)
                     metrics[key] = float(result["value"][1]) * scale
-            return metrics if metrics else self._gpu_zeros()
+            if not metrics:
+                log.warning("_collect_gpu: all queries returned empty (window=%s), returning zeros", window)
+                return self._gpu_zeros()
+            return metrics
         except Exception as exc:
-            log.debug("_collect_gpu: %s", exc)
+            log.warning("_collect_gpu failed: %s", exc)
             return self._gpu_zeros()
 
     @staticmethod

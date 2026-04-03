@@ -170,12 +170,12 @@
 <body>
 
 <header>
-  <img id="logo-customer" alt="" style="height:32px;display:none;margin-right:12px;object-fit:contain">
-  <h1 id="page-title">Fraud Detection Demo v4 — GNN + XGBoost</h1>
+  <img id="logo-customer" alt="" style="height:32px;display:none;object-fit:contain">
+  <img id="logo-nvidia" alt="" style="height:22px;display:none;margin-left:10px;opacity:0.85;object-fit:contain">
+  <h1 id="page-title" style="margin-left:12px;">Fraud Detection Demo v4 — GNN + XGBoost</h1>
   <div id="liveness-badge" class="live-badge connecting"><div class="live-dot"></div><span id="liveness-text">Connecting...</span></div>
   <span class="elapsed"><span id="elapsed">00:00:00</span> elapsed <span id="env-inline"></span></span>
   <div class="header-right">
-    <img id="logo-nvidia" alt="" style="height:22px;display:none;margin-right:12px;object-fit:contain">
     <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
     <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
     <button class="btn-secondary" id="reset-btn" onclick="resetPipeline()">↺ Reset</button>
@@ -672,20 +672,26 @@ function updateDashboard(data) {
   document.getElementById('kpi-ram').textContent = (sys.ram_percent || 0).toFixed(1) + '%';
   document.getElementById('kpi-ram-sub').textContent = (sys.ram_used_gb || 0).toFixed(1) + ' GB used';
 
-  // GPU KPIs (per-GPU from DCGM)
+  // GPU KPIs (per-GPU from DCGM — max over rolling window)
   const gpu = data.gpu || {};
+  const gpuWin = data.gpu_window_s || 30;
   const gn29_0 = gpu.gpu_n29_0_util_pct || 0;
   const gn29_1 = gpu.gpu_n29_1_util_pct || 0;
   const gn25_0 = gpu.gpu_n25_0_util_pct || 0;
   const gn25_1 = gpu.gpu_n25_1_util_pct || 0;
   document.getElementById('kpi-gpu-n29-0').textContent = gn29_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_n29_0_mem_pct || 0).toFixed(1) + '% mem';
+  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_n29_0_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   document.getElementById('kpi-gpu-n29-1').textContent = gn29_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_n29_1_mem_pct || 0).toFixed(1) + '% mem';
+  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_n29_1_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   document.getElementById('kpi-gpu-n25-0').textContent = gn25_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_n25_0_mem_pct || 0).toFixed(1) + '% mem';
+  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_n25_0_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   document.getElementById('kpi-gpu-n25-1').textContent = gn25_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_n25_1_mem_pct || 0).toFixed(1) + '% mem';
+  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_n25_1_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  // Dim tiles when all GPU values are zero (metrics unavailable vs. GPU idle)
+  const allGpuZero = [gn29_0, gn29_1, gn25_0, gn25_1].every(v => v === 0);
+  ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
+    document.getElementById(id).style.color = allGpuZero ? 'var(--text-muted)' : '';
+  });
 
   // Volume processed (infra tab)
   const totalTx = biz.total_transactions || 0;
