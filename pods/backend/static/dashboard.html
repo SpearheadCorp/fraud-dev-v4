@@ -1250,7 +1250,7 @@ function renderPodStatus(services, isRunning) {
 let DEMO_CONFIG = {};
 async function loadDemoConfig() {
   try {
-    const r = await fetch('/static/demo_config.json');
+    const r = await fetch('/static/demo_config.json').catch(() => fetch('demo_config.json'));
     if (!r.ok) return;
     DEMO_CONFIG = await r.json();
 
