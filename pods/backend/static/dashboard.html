@@ -741,20 +741,24 @@ function updateDashboard(data) {
   const catData = ALL_CATS.map(c => fraudByCat[c] || 0);
   if (catChart) {
     catChart.data.datasets[0].data = catData;
-    catChart.update();
+    catChart.update('none');
   }
 
   // Fraud by geography table
   const fraudByGeo = (data.fraud || {}).fraud_by_geography || {};
   const geoBody = document.getElementById('geo-body');
   if (geoBody) {
-    const states = Object.keys(fraudByGeo).slice(0, 10);
-    if (states.length === 0) {
-      geoBody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:20px">No scored data yet</td></tr>';
-    } else {
-      geoBody.innerHTML = states.map((st, i) =>
-        `<tr><td>${st}</td><td>${fmtDollar(fraudByGeo[st])}</td></tr>`
-      ).join('');
+    const geoJson = JSON.stringify(fraudByGeo);
+    if (geoJson !== _lastGeoJson) {
+      _lastGeoJson = geoJson;
+      const states = Object.keys(fraudByGeo).slice(0, 10);
+      if (states.length === 0) {
+        geoBody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:20px">No scored data yet</td></tr>';
+      } else {
+        geoBody.innerHTML = states.map((st, i) =>
+          `<tr><td>${st}</td><td>${fmtDollar(fraudByGeo[st])}</td></tr>`
+        ).join('');
+      }
     }
   }
 
@@ -802,8 +806,13 @@ function updateDashboard(data) {
 // ---------------------------------------------------------------------------
 // Alerts table (real scored data from fraud.recent_alerts)
 // ---------------------------------------------------------------------------
+let _lastAlertsJson = '';
+let _lastGeoJson = '';
 function updateAlertsReal(fraud) {
   const alerts = (fraud.recent_alerts || []);
+  const alertsJson = JSON.stringify(alerts);
+  if (alertsJson === _lastAlertsJson) return;
+  _lastAlertsJson = alertsJson;
   const tbody = document.getElementById('alerts-body');
   if (!alerts.length) {
     tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">No high-risk alerts yet — waiting for scorer</td></tr>';
