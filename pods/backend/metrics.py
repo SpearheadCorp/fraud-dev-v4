@@ -101,9 +101,10 @@ _STATE_CACHE = MODEL_REPO / "pipeline_state.json"
 class MetricsCollector:
     def __init__(self, state: PipelineState) -> None:
         self.state = state
-        self._fraud_file_mtimes: dict = {}
         self._fraud_cache: dict = {}
+        self._fraud_cache_at: float = 0.0
         self._fraud_cache_lock = threading.Lock()
+        self._FRAUD_CACHE_TTL = 5.0  # seconds — force recompute even if same files visible
         self._load_telemetry_cache()
 
     def _load_telemetry_cache(self) -> None:
@@ -368,9 +369,8 @@ class MetricsCollector:
                           if SCORES_PATH.exists() else []
             if not score_files:
                 return {}
-            current_mtimes = {f.name: f.stat().st_mtime for f in score_files}
             with self._fraud_cache_lock:
-                if current_mtimes == self._fraud_file_mtimes and self._fraud_cache:
+                if self._fraud_cache and (time.time() - self._fraud_cache_at) < self._FRAUD_CACHE_TTL:
                     return self._fraud_cache
             df = pd.concat(
                 [pd.read_parquet(str(f), columns=self._FRAUD_COLS) for f in score_files],
@@ -415,8 +415,8 @@ class MetricsCollector:
                 "fraud_by_geography": fraud_by_geography,
             }
             with self._fraud_cache_lock:
-                self._fraud_file_mtimes = current_mtimes
                 self._fraud_cache = result
+                self._fraud_cache_at = time.time()
             return result
         except Exception as exc:
             log.debug("_collect_fraud_metrics: %s", exc)
