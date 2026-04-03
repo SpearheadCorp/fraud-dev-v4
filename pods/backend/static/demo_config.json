@@ -9,5 +9,5 @@
     "dev_label": "dev",
     "dev_style": "font-size:9px;opacity:0.45;text-transform:lowercase;letter-spacing:0"
   },
-  "gpu_util_window_s": 10
+  "gpu_util_window_s": 30
 }
