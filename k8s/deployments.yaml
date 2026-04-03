@@ -60,6 +60,9 @@ spec:
               mountPath: /data/scores
             - name: model-repo
               mountPath: /data/models
+            - name: demo-config
+              mountPath: /app/static/demo_config.json
+              subPath: demo_config.json
           resources:
             requests:
               ephemeral-storage: "1Gi"
@@ -84,6 +87,9 @@ spec:
         - name: model-repo
           persistentVolumeClaim:
             claimName: model-repo-pvc
+        - name: demo-config
+          configMap:
+            name: demo-config
 
 ---
 # ── data-gather (GPU — pre-demo synthetic data generation) ───────────────────
