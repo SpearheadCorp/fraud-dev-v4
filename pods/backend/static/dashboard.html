@@ -741,7 +741,7 @@ function updateDashboard(data) {
   const catData = ALL_CATS.map(c => fraudByCat[c] || 0);
   if (catChart) {
     catChart.data.datasets[0].data = catData;
-    catChart.update();
+    catChart.update('none');
   }
 
   // Fraud by geography table

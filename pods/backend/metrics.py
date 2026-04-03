@@ -5,6 +5,7 @@ FlashBlade storage latency (REST API), queue depth, fraud scores.
 import os
 import json
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -100,6 +101,9 @@ _STATE_CACHE = MODEL_REPO / "pipeline_state.json"
 class MetricsCollector:
     def __init__(self, state: PipelineState) -> None:
         self.state = state
+        self._fraud_file_mtimes: dict = {}
+        self._fraud_cache: dict = {}
+        self._fraud_cache_lock = threading.Lock()
         self._load_telemetry_cache()
 
     def _load_telemetry_cache(self) -> None:
@@ -356,13 +360,22 @@ class MetricsCollector:
     # Fraud scores from GPU scoring output
     # ------------------------------------------------------------------
 
+    _FRAUD_COLS = ["fraud_score", "amt", "category", "state", "scored_at", "merchant", "trans_num"]
+
     def _collect_fraud_metrics(self) -> dict:
         try:
             score_files = sorted(SCORES_PATH.glob("*.parquet"), key=lambda p: p.stat().st_mtime)[-10:] \
                           if SCORES_PATH.exists() else []
             if not score_files:
                 return {}
-            df = pd.concat([pd.read_parquet(str(f)) for f in score_files], ignore_index=True)
+            current_mtimes = {f.name: f.stat().st_mtime for f in score_files}
+            with self._fraud_cache_lock:
+                if current_mtimes == self._fraud_file_mtimes and self._fraud_cache:
+                    return self._fraud_cache
+            df = pd.concat(
+                [pd.read_parquet(str(f), columns=self._FRAUD_COLS) for f in score_files],
+                ignore_index=True,
+            )
             if "fraud_score" not in df.columns:
                 return {}
             alerts = (df[df["fraud_score"] > 0.8]
@@ -394,13 +407,17 @@ class MetricsCollector:
                     .to_dict()
                 )
 
-            return {
+            result = {
                 "fraud_rate_pct":     float((df["fraud_score"] > 0.5).mean() * 100),
                 "total_scored":       len(df),
                 "recent_alerts":      alerts[alert_cols].to_dict("records"),
                 "fraud_by_category":  fraud_by_category,
                 "fraud_by_geography": fraud_by_geography,
             }
+            with self._fraud_cache_lock:
+                self._fraud_file_mtimes = current_mtimes
+                self._fraud_cache = result
+            return result
         except Exception as exc:
             log.debug("_collect_fraud_metrics: %s", exc)
             return {}
