@@ -193,10 +193,13 @@ class MetricsCollector:
 
     def collect_fast(self) -> dict:
         """Light-weight collection: GPU, CPU, FlashBlade latency only.
-        Called at 200ms intervals between full collect() cycles."""
+        Called at 200ms intervals between full collect() cycles.
+        Also includes fraud metrics via TTL cache so category/geo data
+        refreshes every 5s independent of the slow full collect() cycle."""
         system     = self._collect_system()
         gpu        = self._collect_gpu()
         flashblade = self._collect_flashblade()
+        fraud      = self._collect_fraud_metrics() if self.state.is_running else {}
         return {
             "is_running":  self.state.is_running,
             "elapsed_sec": self.state.elapsed_sec,
@@ -204,6 +207,7 @@ class MetricsCollector:
             "system":    system,
             "gpu":       gpu,
             "flashblade": flashblade,
+            "fraud":     fraud,
         }
 
     # ------------------------------------------------------------------
