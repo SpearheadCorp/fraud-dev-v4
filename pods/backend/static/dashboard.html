@@ -48,7 +48,7 @@
   .env-badge.dev  { color: #e3b341; background: rgba(227,179,65,0.12); border: 1px solid rgba(227,179,65,0.35); }
   .env-badge.prod { color: #58a6ff; background: rgba(88,166,255,0.12); border: 1px solid rgba(88,166,255,0.35); }
   .elapsed { color: var(--text-muted); font-size: 12px; }
-  .header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .header-right { margin-left: auto; display: flex; align-items: center; }
 
   /* Buttons */
   button {
@@ -106,7 +106,11 @@
   #pod-modal-btn-row { display: flex; flex-direction: column; gap: 0; }
 
   /* Tabs */
-  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; background: var(--surface); }
+  .tabs {
+    display: flex; align-items: center; gap: 0;
+    border-bottom: 1px solid var(--border); padding: 0 20px;
+    background: var(--surface);
+  }
   .tab-btn {
     padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 500;
     border: none; background: none; color: var(--text-muted); border-bottom: 2px solid transparent;
@@ -114,6 +118,7 @@
   }
   .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab-btn:hover:not(.active) { color: var(--text); }
+  .tab-controls { margin-left: auto; display: flex; gap: 8px; align-items: center; padding: 6px 0; }
 
   /* Tab content */
   .tab-pane { display: none; padding: 20px; }
@@ -174,14 +179,11 @@
 
 <header>
   <img id="logo-customer" alt="" style="height:32px;display:none;object-fit:contain">
-  <img id="logo-nvidia" alt="" style="height:22px;display:none;margin-left:10px;opacity:0.85;object-fit:contain">
   <h1 id="page-title" style="margin-left:12px;">Fraud Detection Demo v4 — GNN + XGBoost</h1>
   <div id="liveness-badge" class="live-badge connecting"><div class="live-dot"></div><span id="liveness-text">Connecting...</span></div>
   <span class="elapsed"><span id="elapsed">00:00:00</span> elapsed <span id="env-inline"></span></span>
   <div class="header-right">
-    <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
-    <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
-    <button class="btn-secondary" id="reset-btn" onclick="resetPipeline()">↺ Reset</button>
+    <img id="logo-nvidia" alt="" style="height:22px;display:none;opacity:0.85;object-fit:contain">
   </div>
 </header>
 
@@ -202,6 +204,11 @@
   <button class="tab-btn active" onclick="showTab('business', this)">Business</button>
   <button class="tab-btn" onclick="showTab('infra', this)">Infrastructure</button>
   <button class="tab-btn" onclick="showTab('model', this)" id="model-tab-btn">Model / SHAP</button>
+  <div class="tab-controls">
+    <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
+    <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
+    <button class="btn-secondary" id="reset-btn" onclick="resetPipeline()">↺ Reset</button>
+  </div>
 </div>
 
 <!-- ===== BUSINESS TAB ===== -->
