@@ -135,6 +135,31 @@
   .kpi-card.kpi-frozen .kpi-value { color: var(--text-muted) !important; opacity: 0.75; }
   .kpi-card.kpi-frozen .kpi-label::after { content: ' · STOPPED'; font-size: 9px; letter-spacing: 0.03em; }
 
+  /* KPI info icon + tooltip */
+  .kpi-label-row { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; }
+  .kpi-label-row .kpi-label { margin-bottom: 0; }
+  .kpi-info { position: relative; display: inline-flex; align-items: center; cursor: default; }
+  .kpi-info-icon {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--border); color: var(--text-muted);
+    font-size: 9px; font-weight: 700; line-height: 13px; text-align: center;
+    user-select: none; flex-shrink: 0;
+  }
+  .kpi-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: #1c2128; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 11px; line-height: 1.5;
+    padding: 8px 10px; width: 200px; white-space: normal;
+    pointer-events: none; z-index: 999;
+    transition: opacity 0.15s ease;
+  }
+  .kpi-tooltip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: var(--border);
+  }
+  .kpi-info:hover .kpi-tooltip { visibility: visible; opacity: 1; }
+
   /* Chart grid */
   .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
   .chart-card {
@@ -208,7 +233,13 @@
 <div id="tab-business" class="tab-pane active">
   <div class="kpi-row">
     <div class="kpi-card highlight">
-      <div class="kpi-label">Fraud Exposure</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Fraud Exposure</div>
+        <div class="kpi-info">
+          <div class="kpi-info-icon">i</div>
+          <div class="kpi-tooltip">Total dollar value of transactions flagged as fraudulent. Cumulative since pipeline start.</div>
+        </div>
+      </div>
       <div class="kpi-value" id="kpi-exposure">$0</div>
       <div class="kpi-sub">estimated at risk</div>
     </div>
