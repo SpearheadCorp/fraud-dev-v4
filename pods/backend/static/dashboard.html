@@ -183,7 +183,7 @@
   <div id="liveness-badge" class="live-badge connecting"><div class="live-dot"></div><span id="liveness-text">Connecting...</span></div>
   <span class="elapsed"><span id="elapsed">00:00:00</span> elapsed <span id="env-inline"></span></span>
   <div class="header-right">
-    <img id="logo-nvidia" alt="" style="height:22px;display:none;opacity:0.85;object-fit:contain">
+    <img id="logo-nvidia" alt="" style="height:40px;display:none;opacity:0.85;object-fit:contain">
   </div>
 </header>
 
@@ -1331,7 +1331,7 @@ async function loadDemoConfig() {
     if (ln && ln_cfg) {
       ln.src    = ln_cfg.src;
       ln.alt    = ln_cfg.alt || '';
-      ln.style.height  = (ln_cfg.height || '22') + 'px';
+      ln.style.height  = (ln_cfg.height || '40') + 'px';
       ln.style.display = 'block';
     }
   } catch(e) {
