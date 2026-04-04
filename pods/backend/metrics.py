@@ -548,17 +548,16 @@ class MetricsCollector:
             return self._gpu_zeros()
 
     def _collect_gpu_rt(self) -> dict:
-        """Instant (real-time) GPU util for chart — no max_over_time window.
-        Uses the same metric/fallback logic as _collect_gpu() but queries
-        the current value so the chart shows live spikes."""
+        """1s max_over_time GPU util for chart — catches brief GPU bursts that
+        instant queries miss, while staying near real-time."""
         try:
             metrics: dict = {}
             for metric_name, key_prefix, scale in [
-                ("DCGM_FI_PROF_GR_ENGINE_ACTIVE", "gpu_{host}_{gpu}_util_pct", 100.0),
-                ("DCGM_FI_DEV_GPU_UTIL",          "gpu_{host}_{gpu}_util_pct", 1.0),
-                ("DCGM_FI_DEV_MEM_COPY_UTIL",     "gpu_{host}_{gpu}_mem_pct",  1.0),
+                ("max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[1s])", "gpu_{host}_{gpu}_util_pct", 100.0),
+                ("max_over_time(DCGM_FI_DEV_GPU_UTIL[1s])",          "gpu_{host}_{gpu}_util_pct", 1.0),
+                ("max_over_time(DCGM_FI_DEV_MEM_COPY_UTIL[1s])",     "gpu_{host}_{gpu}_mem_pct",  1.0),
             ]:
-                if metric_name == "DCGM_FI_DEV_GPU_UTIL":
+                if "DCGM_FI_DEV_GPU_UTIL" in metric_name:
                     if any(k.endswith("_util_pct") for k in metrics):
                         continue
                 resp = requests.get(
