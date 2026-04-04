@@ -604,9 +604,23 @@ function updateDashboard(data) {
   document.getElementById('stop-btn').disabled = !isRunning;
   if (!isRunning) stopPodPolling();
 
-  // On running→stopped transition: clear the Transaction Volume chart so it drops to zero immediately
+  // On running→stopped transition: immediately zero GPU KPI tiles, clear GPU chart history (M-02),
+  // and clear Transaction Volume chart (M-03) so all metrics drop to 0 at once
   if (_prevIsRunning === true && !isRunning) {
+    ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
+      document.getElementById(id).textContent = '0.0%';
+    });
+    ['kpi-gpu-n29-0-mem','kpi-gpu-n29-1-mem','kpi-gpu-n25-0-mem','kpi-gpu-n25-1-mem'].forEach(id => {
+      document.getElementById(id).textContent = '0.0% mem';
+    });
+    history.gpu_n29_0.length = 0; history.gpu_n29_1.length = 0;
+    history.gpu_n25_0.length = 0; history.gpu_n25_1.length = 0;
     history.tx.length = 0; history.labels.length = 0;
+    if (utilChart) {
+      utilChart.data.labels = [];
+      utilChart.data.datasets.forEach(ds => ds.data = []);
+      utilChart.update('none');
+    }
     updateLineChart(txChart, [], []);
     if (tputLatChart) {
       tputLatChart.data.labels = [];

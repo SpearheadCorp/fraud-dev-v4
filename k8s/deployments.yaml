@@ -110,8 +110,9 @@ spec:
       labels:
         app: data-gather
     spec:
+      terminationGracePeriodSeconds: 5
       nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29   
+        kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: data-gather
           image: 10.23.181.247:5000/fraud-det-v4/data-gather:latest
@@ -167,6 +168,7 @@ spec:
       labels:
         app: data-prep
     spec:
+      terminationGracePeriodSeconds: 5
       nodeSelector:
         kubernetes.io/hostname: slc6-lg-n3-b30-25
       containers:
@@ -229,6 +231,7 @@ spec:
       labels:
         app: triton
     spec:
+      terminationGracePeriodSeconds: 5
       nodeSelector:
         kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
@@ -288,6 +291,7 @@ spec:
       labels:
         app: scoring
     spec:
+      terminationGracePeriodSeconds: 5
       nodeSelector:
         kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
@@ -354,6 +358,7 @@ spec:
       labels:
         app: model-train
     spec:
+      terminationGracePeriodSeconds: 5
       nodeSelector:
         kubernetes.io/hostname: slc6-lg-n3-b30-25
       containers:
