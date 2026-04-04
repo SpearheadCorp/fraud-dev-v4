@@ -108,6 +108,17 @@ _TELEMETRY_CACHE = MODEL_REPO / "last_telemetry.json"
 _STATE_CACHE = MODEL_REPO / "pipeline_state.json"
 
 
+_GPU_ROLE_MAP_TTL = 30.0  # seconds between k8s API refreshes for GPU role map
+
+# Maps app label → stable role name used in metric keys and dashboard
+_APP_TO_ROLE = {
+    "data-prep":   "prep",
+    "model-train": "training",
+    "scoring":     "scoring",
+    "triton":      "triton",
+}
+
+
 class MetricsCollector:
     def __init__(self, state: PipelineState) -> None:
         self.state = state
@@ -116,6 +127,10 @@ class MetricsCollector:
         self._fraud_cache_lock = threading.Lock()
         self._FRAUD_CACHE_TTL = 5.0  # seconds — force recompute even if same files visible
         self._gpu_window: int = _load_gpu_window()
+        # GPU role map: {"n25_0": "prep", "n25_1": "training", ...}
+        # Refreshed from k8s API so tiles never swap on pod restart.
+        self._gpu_role_map: dict = {}
+        self._gpu_role_map_ts: float = 0.0
         self._load_telemetry_cache()
 
     def _load_telemetry_cache(self) -> None:
@@ -502,6 +517,48 @@ class MetricsCollector:
     # GPU metrics via Prometheus / DCGM
     # ------------------------------------------------------------------
 
+    def _refresh_gpu_role_map(self) -> None:
+        """Build {node_short}_{gpu_index} → role mapping by reading each pod's
+        CUDA_VISIBLE_DEVICES env var (injected by the k8s NVIDIA device plugin).
+        Cached for _GPU_ROLE_MAP_TTL seconds to avoid hammering the k8s API."""
+        now = time.time()
+        if now - self._gpu_role_map_ts < _GPU_ROLE_MAP_TTL and self._gpu_role_map:
+            return
+        try:
+            v1 = _core_v1()
+            selector = "app in (data-prep,model-train,scoring,triton)"
+            pods = v1.list_namespaced_pod(NAMESPACE, label_selector=selector)
+            new_map: dict = {}
+            for pod in pods.items:
+                if pod.status.phase != "Running":
+                    continue
+                app  = (pod.metadata.labels or {}).get("app", "")
+                role = _APP_TO_ROLE.get(app)
+                if not role:
+                    continue
+                node  = pod.spec.node_name or ""
+                short = "n" + node.split("-")[-1] if "-" in node else node
+                for container in (pod.spec.containers or []):
+                    for env_var in (container.env or []):
+                        if env_var.name == "CUDA_VISIBLE_DEVICES" and env_var.value is not None:
+                            gpu_idx = env_var.value.strip()
+                            new_map[f"{short}_{gpu_idx}"] = role
+                            break
+            if new_map:
+                self._gpu_role_map = new_map
+                self._gpu_role_map_ts = now
+                log.debug("GPU role map: %s", new_map)
+        except Exception as exc:
+            log.warning("_refresh_gpu_role_map failed: %s", exc)
+
+    def _role_key(self, short: str, gpu_id: str, suffix: str) -> str:
+        """Return role-based key (e.g. gpu_prep_util_pct) if role map is known,
+        otherwise fall back to index-based key (gpu_n25_0_util_pct)."""
+        role = self._gpu_role_map.get(f"{short}_{gpu_id}")
+        if role:
+            return f"gpu_{role}_{suffix}"
+        return f"gpu_{short}_{gpu_id}_{suffix}"
+
     def _collect_gpu(self) -> dict:
         """Query DCGM GPU metrics for all GPU nodes (both .44 and .40).
 
@@ -513,34 +570,32 @@ class MetricsCollector:
         Falls back to DCGM_FI_DEV_GPU_UTIL if the profiling metric is not
         exported by this cluster's DCGM configuration.
         """
+        self._refresh_gpu_role_map()
         try:
             metrics: dict = {}
             window = f"{self._gpu_window}s"
-            for metric_name, key_prefix, scale in [
-                (f"max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[{window}])", "gpu_{host}_{gpu}_util_pct", 100.0),
-                (f"max_over_time(DCGM_FI_DEV_GPU_UTIL[{window}])",          "gpu_{host}_{gpu}_util_pct", 1.0),
-                (f"max_over_time(DCGM_FI_DEV_MEM_COPY_UTIL[{window}])",     "gpu_{host}_{gpu}_mem_pct",  1.0),
+            for metric_name, suffix, scale in [
+                (f"max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[{window}])", "util_pct", 100.0),
+                (f"max_over_time(DCGM_FI_DEV_GPU_UTIL[{window}])",          "util_pct", 1.0),
+                (f"max_over_time(DCGM_FI_DEV_MEM_COPY_UTIL[{window}])",     "mem_pct",  1.0),
             ]:
-                # Skip DCGM_FI_DEV_GPU_UTIL fallback if profiling metric already populated util keys
                 if "DCGM_FI_DEV_GPU_UTIL" in metric_name:
                     if any(k.endswith("_util_pct") for k in metrics):
                         continue
-                    log.warning("_collect_gpu: profiling metric returned no results, falling back to DCGM_FI_DEV_GPU_UTIL (window=%s)", window)
-
+                    log.warning("_collect_gpu: profiling metric empty, falling back to DCGM_FI_DEV_GPU_UTIL (window=%s)", window)
                 resp = requests.get(
                     f"{PROMETHEUS_URL}/api/v1/query",
                     params={"query": metric_name}, timeout=3,
                 )
                 resp.raise_for_status()
                 for result in resp.json().get("data", {}).get("result", []):
-                    gpu_id = result.get("metric", {}).get("gpu", "0")
+                    gpu_id   = result.get("metric", {}).get("gpu", "0")
                     hostname = result.get("metric", {}).get("Hostname", "unknown")
-                    # Shorten hostname: slc6-lg-n3-b30-29 -> n29, slc6-lg-n3-b30-25 -> n25
-                    short = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
-                    key = key_prefix.format(host=short, gpu=gpu_id)
+                    short    = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
+                    key = self._role_key(short, gpu_id, suffix)
                     metrics[key] = float(result["value"][1]) * scale
             if not metrics:
-                log.warning("_collect_gpu: all queries returned empty (window=%s), returning zeros", window)
+                log.warning("_collect_gpu: all queries empty (window=%s)", window)
                 return self._gpu_zeros()
             return metrics
         except Exception as exc:
@@ -552,10 +607,10 @@ class MetricsCollector:
         instant queries miss, while staying near real-time."""
         try:
             metrics: dict = {}
-            for metric_name, key_prefix, scale in [
-                ("max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[1s])", "gpu_{host}_{gpu}_util_pct", 100.0),
-                ("max_over_time(DCGM_FI_DEV_GPU_UTIL[1s])",          "gpu_{host}_{gpu}_util_pct", 1.0),
-                ("max_over_time(DCGM_FI_DEV_MEM_COPY_UTIL[1s])",     "gpu_{host}_{gpu}_mem_pct",  1.0),
+            for metric_name, suffix, scale in [
+                ("max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[1s])", "util_pct", 100.0),
+                ("max_over_time(DCGM_FI_DEV_GPU_UTIL[1s])",          "util_pct", 1.0),
+                ("max_over_time(DCGM_FI_DEV_MEM_COPY_UTIL[1s])",     "mem_pct",  1.0),
             ]:
                 if "DCGM_FI_DEV_GPU_UTIL" in metric_name:
                     if any(k.endswith("_util_pct") for k in metrics):
@@ -566,10 +621,10 @@ class MetricsCollector:
                 )
                 resp.raise_for_status()
                 for result in resp.json().get("data", {}).get("result", []):
-                    gpu_id = result.get("metric", {}).get("gpu", "0")
+                    gpu_id   = result.get("metric", {}).get("gpu", "0")
                     hostname = result.get("metric", {}).get("Hostname", "unknown")
-                    short = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
-                    key = key_prefix.format(host=short, gpu=gpu_id)
+                    short    = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
+                    key = self._role_key(short, gpu_id, suffix)
                     metrics[key] = float(result["value"][1]) * scale
             return metrics if metrics else self._gpu_zeros()
         except Exception as exc:
@@ -579,10 +634,10 @@ class MetricsCollector:
     @staticmethod
     def _gpu_zeros() -> dict:
         return {
-            "gpu_n29_0_util_pct": 0.0, "gpu_n29_0_mem_pct": 0.0,
-            "gpu_n29_1_util_pct": 0.0, "gpu_n29_1_mem_pct": 0.0,
-            "gpu_n25_0_util_pct": 0.0, "gpu_n25_0_mem_pct": 0.0,
-            "gpu_n25_1_util_pct": 0.0, "gpu_n25_1_mem_pct": 0.0,
+            "gpu_scoring_util_pct":  0.0, "gpu_scoring_mem_pct":  0.0,
+            "gpu_triton_util_pct":   0.0, "gpu_triton_mem_pct":   0.0,
+            "gpu_prep_util_pct":     0.0, "gpu_prep_mem_pct":     0.0,
+            "gpu_training_util_pct": 0.0, "gpu_training_mem_pct": 0.0,
         }
 
     # ------------------------------------------------------------------

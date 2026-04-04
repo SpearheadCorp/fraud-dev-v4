@@ -429,7 +429,7 @@ const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
 
 // Time-series history buffers
 const history = {
-  gpu_n29_0: [], gpu_n29_1: [], gpu_n25_0: [], gpu_n25_1: [],
+  gpu_scoring: [], gpu_triton: [], gpu_prep: [], gpu_training: [],
   tx: [], fbLatency: [], labels: []
 };
 
@@ -647,23 +647,23 @@ function updateDashboard(data) {
   // System KPIs
   const sys = data.system || {};
 
-  // GPU KPIs (per-GPU from DCGM — max over rolling window)
+  // GPU KPIs (role-based keys — stable regardless of k8s GPU assignment order)
   const gpu = data.gpu || {};
   const gpuWin = data.gpu_window_s || 30;
-  const gn29_0 = gpu.gpu_n29_0_util_pct || 0;
-  const gn29_1 = gpu.gpu_n29_1_util_pct || 0;
-  const gn25_0 = gpu.gpu_n25_0_util_pct || 0;
-  const gn25_1 = gpu.gpu_n25_1_util_pct || 0;
-  document.getElementById('kpi-gpu-n29-0').textContent = gn29_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_n29_0_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
-  document.getElementById('kpi-gpu-n29-1').textContent = gn29_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_n29_1_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
-  document.getElementById('kpi-gpu-n25-0').textContent = gn25_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_n25_0_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
-  document.getElementById('kpi-gpu-n25-1').textContent = gn25_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_n25_1_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  const gScoring  = gpu.gpu_scoring_util_pct  || 0;
+  const gTriton   = gpu.gpu_triton_util_pct   || 0;
+  const gPrep     = gpu.gpu_prep_util_pct     || 0;
+  const gTraining = gpu.gpu_training_util_pct || 0;
+  document.getElementById('kpi-gpu-n29-0').textContent = gScoring.toFixed(1) + '%';
+  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_scoring_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  document.getElementById('kpi-gpu-n29-1').textContent = gTriton.toFixed(1) + '%';
+  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_triton_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  document.getElementById('kpi-gpu-n25-0').textContent = gPrep.toFixed(1) + '%';
+  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_prep_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  document.getElementById('kpi-gpu-n25-1').textContent = gTraining.toFixed(1) + '%';
+  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_training_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   // Dim tiles when all GPU values are zero (metrics unavailable vs. GPU idle)
-  const allGpuZero = [gn29_0, gn29_1, gn25_0, gn25_1].every(v => v === 0);
+  const allGpuZero = [gScoring, gTriton, gPrep, gTraining].every(v => v === 0);
   ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
     document.getElementById(id).style.color = allGpuZero ? 'var(--text-muted)' : '';
   });
@@ -684,10 +684,10 @@ function updateDashboard(data) {
 
   // Chart uses real-time instant values (not max-window) so spikes are visible
   const gpuRt = data.gpu_rt || {};
-  pushHistory(history.gpu_n29_0, gpuRt.gpu_n29_0_util_pct || 0);
-  pushHistory(history.gpu_n29_1, gpuRt.gpu_n29_1_util_pct || 0);
-  pushHistory(history.gpu_n25_0, gpuRt.gpu_n25_0_util_pct || 0);
-  pushHistory(history.gpu_n25_1, gpuRt.gpu_n25_1_util_pct || 0);
+  pushHistory(history.gpu_scoring,  gpuRt.gpu_scoring_util_pct  || 0);
+  pushHistory(history.gpu_triton,   gpuRt.gpu_triton_util_pct   || 0);
+  pushHistory(history.gpu_prep,     gpuRt.gpu_prep_util_pct     || 0);
+  pushHistory(history.gpu_training, gpuRt.gpu_training_util_pct || 0);
   pushHistory(history.tx, txRate);
   pushHistory(history.fbLatency, fbNfsOps);
   pushHistory(history.labels, now);
@@ -697,10 +697,10 @@ function updateDashboard(data) {
   // Chart 1: GPU / CPU Utilization
   if (utilChart) {
     utilChart.data.labels = [...history.labels];
-    utilChart.data.datasets[0].data = [...history.gpu_n29_0];
-    utilChart.data.datasets[1].data = [...history.gpu_n29_1];
-    utilChart.data.datasets[2].data = [...history.gpu_n25_0];
-    utilChart.data.datasets[3].data = [...history.gpu_n25_1];
+    utilChart.data.datasets[0].data = [...history.gpu_scoring];
+    utilChart.data.datasets[1].data = [...history.gpu_triton];
+    utilChart.data.datasets[2].data = [...history.gpu_prep];
+    utilChart.data.datasets[3].data = [...history.gpu_training];
     utilChart.data.datasets[4].data = [...history.fbLatency];
     utilChart.update('none');
   }
@@ -1090,8 +1090,8 @@ function _clearDashboard() {
     document.getElementById(id).textContent = '0% mem';
   });
   ['kpi-f1','kpi-auc-pr','kpi-prec','kpi-recall'].forEach(id => { document.getElementById(id).textContent = '—'; });
-  history.gpu_n29_0.length = 0; history.gpu_n29_1.length = 0;
-  history.gpu_n25_0.length = 0; history.gpu_n25_1.length = 0;
+  history.gpu_scoring.length = 0; history.gpu_triton.length = 0;
+  history.gpu_prep.length = 0;    history.gpu_training.length = 0;
   history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
   updateLineChart(txChart, [], []);
   if (utilChart) { utilChart.data.labels = []; utilChart.data.datasets.forEach(ds => ds.data = []); utilChart.update('none'); }

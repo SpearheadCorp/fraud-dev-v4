@@ -174,8 +174,6 @@ spec:
           image: 10.23.181.247:5000/fraud-det-v4/data-prep:latest
           imagePullPolicy: Always
           env:
-            - name: CUDA_VISIBLE_DEVICES
-              value: "0"
             - name: INPUT_PATH
               value: /data/raw
             - name: OUTPUT_PATH
@@ -242,8 +240,6 @@ spec:
             - containerPort: 8001   # gRPC
             - containerPort: 8002   # Metrics
           env:
-            - name: CUDA_VISIBLE_DEVICES
-              value: "1"
             - name: MODEL_REPO
               value: /data/models
           volumeMounts:
@@ -299,8 +295,6 @@ spec:
           image: 10.23.181.247:5000/fraud-det-v4/scoring:latest
           imagePullPolicy: Always
           env:
-            - name: CUDA_VISIBLE_DEVICES
-              value: "0"
             - name: FEATURES_PATH
               value: /data/features
             - name: SCORES_PATH
@@ -367,8 +361,6 @@ spec:
           image: 10.23.181.247:5000/fraud-det-v4/model-train:latest
           imagePullPolicy: Always
           env:
-            - name: CUDA_VISIBLE_DEVICES
-              value: "1"
             - name: INPUT_PATH
               value: /data/features
             - name: MODEL_REPO
