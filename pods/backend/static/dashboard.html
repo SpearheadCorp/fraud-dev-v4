@@ -1161,6 +1161,14 @@ async function startPipeline() {
 }
 
 async function stopPipeline() {
+  // Clear all charts immediately on Stop click — no waiting for WebSocket
+  history.gpu_scoring.length = 0; history.gpu_triton.length = 0;
+  history.gpu_prep.length = 0;    history.gpu_training.length = 0;
+  history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
+  updateLineChart(txChart, [], []);
+  if (utilChart)    { utilChart.data.labels = [];    utilChart.data.datasets.forEach(ds => ds.data = []);    utilChart.update('none'); }
+  if (tputLatChart) { tputLatChart.data.labels = []; tputLatChart.data.datasets.forEach(ds => ds.data = []); tputLatChart.update('none'); }
+
   _ctlShow('Stopping Pipeline...', 'Scaling all pods to zero');
   const pods = Object.entries(SERVICE_LABELS);
   _ctlRenderPods({}, pods, 'down');
