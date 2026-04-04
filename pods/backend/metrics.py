@@ -518,36 +518,35 @@ class MetricsCollector:
     # ------------------------------------------------------------------
 
     def _refresh_gpu_role_map(self) -> None:
-        """Build {node_short}_{gpu_index} → role mapping by reading each pod's
-        CUDA_VISIBLE_DEVICES env var (injected by the k8s NVIDIA device plugin).
-        Cached for _GPU_ROLE_MAP_TTL seconds to avoid hammering the k8s API."""
+        """Build {node_short}_{gpu_index} → role mapping using DCGM's
+        exported_container label from Prometheus. The NVIDIA device plugin k8s
+        integration populates this label with the container name that owns each
+        GPU — no CUDA_VISIBLE_DEVICES or k8s API needed."""
         now = time.time()
         if now - self._gpu_role_map_ts < _GPU_ROLE_MAP_TTL and self._gpu_role_map:
             return
         try:
-            v1 = _core_v1()
-            selector = "app in (data-prep,model-train,scoring,triton)"
-            pods = v1.list_namespaced_pod(NAMESPACE, label_selector=selector)
+            resp = requests.get(
+                f"{PROMETHEUS_URL}/api/v1/query",
+                params={"query": "DCGM_FI_DEV_GPU_UTIL"},
+                timeout=3,
+            )
+            resp.raise_for_status()
             new_map: dict = {}
-            for pod in pods.items:
-                if pod.status.phase != "Running":
-                    continue
-                app  = (pod.metadata.labels or {}).get("app", "")
-                role = _APP_TO_ROLE.get(app)
+            for result in resp.json().get("data", {}).get("result", []):
+                m                  = result.get("metric", {})
+                exported_container = m.get("exported_container", "")
+                role               = _APP_TO_ROLE.get(exported_container)
                 if not role:
                     continue
-                node  = pod.spec.node_name or ""
-                short = "n" + node.split("-")[-1] if "-" in node else node
-                for container in (pod.spec.containers or []):
-                    for env_var in (container.env or []):
-                        if env_var.name == "CUDA_VISIBLE_DEVICES" and env_var.value is not None:
-                            gpu_idx = env_var.value.strip()
-                            new_map[f"{short}_{gpu_idx}"] = role
-                            break
+                hostname = m.get("Hostname", "unknown")
+                gpu_id   = m.get("gpu", "0")
+                short    = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
+                new_map[f"{short}_{gpu_id}"] = role
             if new_map:
                 self._gpu_role_map = new_map
                 self._gpu_role_map_ts = now
-                log.debug("GPU role map: %s", new_map)
+                log.info("GPU role map from DCGM exported_container: %s", new_map)
         except Exception as exc:
             log.warning("_refresh_gpu_role_map failed: %s", exc)
 
