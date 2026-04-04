@@ -131,6 +131,9 @@
   .kpi-card.highlight .kpi-value { color: var(--orange); }
   .kpi-card.good .kpi-value { color: var(--green); }
   .kpi-card.accent .kpi-value { color: var(--accent); }
+  /* Frozen state: pipeline stopped — values preserved as run summary, visually dimmed */
+  .kpi-card.kpi-frozen .kpi-value { color: var(--text-muted) !important; opacity: 0.75; }
+  .kpi-card.kpi-frozen .kpi-label::after { content: ' · STOPPED'; font-size: 9px; letter-spacing: 0.03em; }
 
   /* Chart grid */
   .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
@@ -307,9 +310,9 @@
         <div class="chart-title" style="margin:0">GPU Engine Active <span style="font-size:10px;color:var(--text-muted)">(1s DCGM profiling)</span></div>
         <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">Scoring</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#9d6dd8">Triton</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#58a6ff">Triton</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,2)"><span style="color:#f0883e">Prep</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#d2691e">Training</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#3fb950">Training</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,4)"><span style="color:#e3b341">FB ms</span></label>
         </div>
       </div>
@@ -430,7 +433,7 @@ const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
 
 // Time-series history buffers
 const history = {
-  gpu_n29_0: [], gpu_n29_1: [], gpu_n25_0: [], gpu_n25_1: [],
+  gpu_scoring: [], gpu_triton: [], gpu_prep: [], gpu_training: [],
   tx: [], fbLatency: [], labels: []
 };
 
@@ -501,9 +504,9 @@ function makeUtilChart() {
       labels: [],
       datasets: [
         { label: 'Scoring', data: [], borderColor: '#bc8cff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'Triton',  data: [], borderColor: '#9d6dd8', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Triton',   data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'Prep',     data: [], borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'Training', data: [], borderColor: '#d2691e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Training', data: [], borderColor: '#3fb950', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'FB ms',     data: [], borderColor: '#e3b341', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, borderDash: [4,2], yAxisID: 'yFb' },
       ]
     },
@@ -601,8 +604,8 @@ function updateDashboard(data) {
   document.getElementById('stop-btn').disabled = !isRunning;
   if (!isRunning) stopPodPolling();
 
-  // On running→stopped transition: immediately zero GPU KPI tiles and clear chart history
-  // so utilization drops to 0 at once instead of holding the last high value
+  // On running→stopped transition: immediately zero GPU KPI tiles, clear GPU chart history (M-02),
+  // and clear Transaction Volume chart (M-03) so all metrics drop to 0 at once
   if (_prevIsRunning === true && !isRunning) {
     ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
       document.getElementById(id).textContent = '0.0%';
@@ -612,14 +615,27 @@ function updateDashboard(data) {
     });
     history.gpu_n29_0.length = 0; history.gpu_n29_1.length = 0;
     history.gpu_n25_0.length = 0; history.gpu_n25_1.length = 0;
-    history.labels.length = 0;
+    history.tx.length = 0; history.labels.length = 0;
     if (utilChart) {
       utilChart.data.labels = [];
       utilChart.data.datasets.forEach(ds => ds.data = []);
       utilChart.update('none');
     }
+    updateLineChart(txChart, [], []);
+    if (tputLatChart) {
+      tputLatChart.data.labels = [];
+      tputLatChart.data.datasets.forEach(ds => ds.data = []);
+      tputLatChart.update('none');
+    }
   }
   _prevIsRunning = isRunning;
+
+  // Dim business KPI tiles when stopped — values are preserved as final run summary
+  const BIZ_KPI_IDS = ['kpi-exposure','kpi-txns','kpi-flagged','kpi-fraud-rate','kpi-total-amt','kpi-decision-latency','kpi-vol'];
+  BIZ_KPI_IDS.forEach(id => {
+    const card = document.getElementById(id)?.closest('.kpi-card');
+    if (card) card.classList.toggle('kpi-frozen', !isRunning);
+  });
 
   // Env badge
   const envInline = document.getElementById('env-inline');
@@ -668,25 +684,26 @@ function updateDashboard(data) {
   // System KPIs
   const sys = data.system || {};
 
-  // GPU KPIs (per-GPU from DCGM — max over rolling window)
+  // GPU KPIs (role-based keys — stable regardless of k8s GPU assignment order)
   const gpu = data.gpu || {};
   const gpuWin = data.gpu_window_s || 30;
-  const gn29_0 = gpu.gpu_n29_0_util_pct || 0;
-  const gn29_1 = gpu.gpu_n29_1_util_pct || 0;
-  const gn25_0 = gpu.gpu_n25_0_util_pct || 0;
-  const gn25_1 = gpu.gpu_n25_1_util_pct || 0;
-  document.getElementById('kpi-gpu-n29-0').textContent = gn29_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_n29_0_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
-  document.getElementById('kpi-gpu-n29-1').textContent = gn29_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_n29_1_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
-  document.getElementById('kpi-gpu-n25-0').textContent = gn25_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_n25_0_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
-  document.getElementById('kpi-gpu-n25-1').textContent = gn25_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_n25_1_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  const gScoring  = gpu.gpu_scoring_util_pct  || 0;
+  const gTriton   = gpu.gpu_triton_util_pct   || 0;
+  const gPrep     = gpu.gpu_prep_util_pct     || 0;
+  const gTraining = gpu.gpu_training_util_pct || 0;
+  document.getElementById('kpi-gpu-n29-0').textContent = gScoring.toFixed(1) + '%';
+  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_scoring_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  document.getElementById('kpi-gpu-n29-1').textContent = gTriton.toFixed(1) + '%';
+  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_triton_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  document.getElementById('kpi-gpu-n25-0').textContent = gPrep.toFixed(1) + '%';
+  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_prep_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  document.getElementById('kpi-gpu-n25-1').textContent = gTraining.toFixed(1) + '%';
+  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_training_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   // Dim tiles when all GPU values are zero (metrics unavailable vs. GPU idle)
-  const allGpuZero = [gn29_0, gn29_1, gn25_0, gn25_1].every(v => v === 0);
-  ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
-    document.getElementById(id).style.color = allGpuZero ? 'var(--text-muted)' : '';
+  const allGpuZero = [gScoring, gTriton, gPrep, gTraining].every(v => v === 0);
+  const gpuTileColors = { 'kpi-gpu-n29-0': '#bc8cff', 'kpi-gpu-n29-1': '#58a6ff', 'kpi-gpu-n25-0': '#f0883e', 'kpi-gpu-n25-1': '#3fb950' };
+  Object.entries(gpuTileColors).forEach(([id, color]) => {
+    document.getElementById(id).style.color = allGpuZero ? 'var(--text-muted)' : color;
   });
 
   // Volume processed (infra tab)
@@ -705,10 +722,10 @@ function updateDashboard(data) {
 
   // Chart uses real-time instant values (not max-window) so spikes are visible
   const gpuRt = data.gpu_rt || {};
-  pushHistory(history.gpu_n29_0, gpuRt.gpu_n29_0_util_pct || 0);
-  pushHistory(history.gpu_n29_1, gpuRt.gpu_n29_1_util_pct || 0);
-  pushHistory(history.gpu_n25_0, gpuRt.gpu_n25_0_util_pct || 0);
-  pushHistory(history.gpu_n25_1, gpuRt.gpu_n25_1_util_pct || 0);
+  pushHistory(history.gpu_scoring,  gpuRt.gpu_scoring_util_pct  || 0);
+  pushHistory(history.gpu_triton,   gpuRt.gpu_triton_util_pct   || 0);
+  pushHistory(history.gpu_prep,     gpuRt.gpu_prep_util_pct     || 0);
+  pushHistory(history.gpu_training, gpuRt.gpu_training_util_pct || 0);
   pushHistory(history.tx, txRate);
   pushHistory(history.fbLatency, fbNfsOps);
   pushHistory(history.labels, now);
@@ -718,10 +735,10 @@ function updateDashboard(data) {
   // Chart 1: GPU / CPU Utilization
   if (utilChart) {
     utilChart.data.labels = [...history.labels];
-    utilChart.data.datasets[0].data = [...history.gpu_n29_0];
-    utilChart.data.datasets[1].data = [...history.gpu_n29_1];
-    utilChart.data.datasets[2].data = [...history.gpu_n25_0];
-    utilChart.data.datasets[3].data = [...history.gpu_n25_1];
+    utilChart.data.datasets[0].data = [...history.gpu_scoring];
+    utilChart.data.datasets[1].data = [...history.gpu_triton];
+    utilChart.data.datasets[2].data = [...history.gpu_prep];
+    utilChart.data.datasets[3].data = [...history.gpu_training];
     utilChart.data.datasets[4].data = [...history.fbLatency];
     utilChart.update('none');
   }
@@ -1111,8 +1128,8 @@ function _clearDashboard() {
     document.getElementById(id).textContent = '0% mem';
   });
   ['kpi-f1','kpi-auc-pr','kpi-prec','kpi-recall'].forEach(id => { document.getElementById(id).textContent = '—'; });
-  history.gpu_n29_0.length = 0; history.gpu_n29_1.length = 0;
-  history.gpu_n25_0.length = 0; history.gpu_n25_1.length = 0;
+  history.gpu_scoring.length = 0; history.gpu_triton.length = 0;
+  history.gpu_prep.length = 0;    history.gpu_training.length = 0;
   history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
   updateLineChart(txChart, [], []);
   if (utilChart) { utilChart.data.labels = []; utilChart.data.datasets.forEach(ds => ds.data = []); utilChart.update('none'); }
