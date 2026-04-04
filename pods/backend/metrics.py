@@ -189,6 +189,8 @@ class MetricsCollector:
         system     = self._collect_system()
         gpu        = self._collect_gpu()        if self.state.is_running else self._gpu_zeros()
         business   = self._compute_kpis(telemetry)
+        if not self.state.is_running:
+            business['prep_rows_per_sec'] = 0
         storage    = self._collect_storage()
         flashblade = self._collect_flashblade()
         queue      = self._collect_queue_depth()

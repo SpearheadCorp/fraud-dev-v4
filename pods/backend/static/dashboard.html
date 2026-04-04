@@ -131,6 +131,9 @@
   .kpi-card.highlight .kpi-value { color: var(--orange); }
   .kpi-card.good .kpi-value { color: var(--green); }
   .kpi-card.accent .kpi-value { color: var(--accent); }
+  /* Frozen state: pipeline stopped — values preserved as run summary, visually dimmed */
+  .kpi-card.kpi-frozen .kpi-value { color: var(--text-muted) !important; opacity: 0.75; }
+  .kpi-card.kpi-frozen .kpi-label::after { content: ' · STOPPED'; font-size: 9px; letter-spacing: 0.03em; }
 
   /* Chart grid */
   .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
@@ -425,6 +428,7 @@ let ws = null;
 let wsConnected = false;
 let shapLoaded = false;
 let modelTabOpened = false;
+let _prevIsRunning = null;
 const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
 
 // Time-series history buffers
@@ -599,6 +603,25 @@ function updateDashboard(data) {
   startBtn.disabled = isRunning;
   document.getElementById('stop-btn').disabled = !isRunning;
   if (!isRunning) stopPodPolling();
+
+  // On running→stopped transition: clear the Transaction Volume chart so it drops to zero immediately
+  if (_prevIsRunning === true && !isRunning) {
+    history.tx.length = 0; history.labels.length = 0;
+    updateLineChart(txChart, [], []);
+    if (tputLatChart) {
+      tputLatChart.data.labels = [];
+      tputLatChart.data.datasets.forEach(ds => ds.data = []);
+      tputLatChart.update('none');
+    }
+  }
+  _prevIsRunning = isRunning;
+
+  // Dim business KPI tiles when stopped — values are preserved as final run summary
+  const BIZ_KPI_IDS = ['kpi-exposure','kpi-txns','kpi-flagged','kpi-fraud-rate','kpi-total-amt','kpi-decision-latency','kpi-vol'];
+  BIZ_KPI_IDS.forEach(id => {
+    const card = document.getElementById(id)?.closest('.kpi-card');
+    if (card) card.classList.toggle('kpi-frozen', !isRunning);
+  });
 
   // Env badge
   const envInline = document.getElementById('env-inline');
