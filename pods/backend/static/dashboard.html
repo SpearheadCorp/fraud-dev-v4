@@ -293,21 +293,6 @@
       <div class="kpi-value" id="kpi-gpu-n25-1">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n25-1-mem">0% mem</div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-label">CPU .44</div>
-      <div class="kpi-value" id="kpi-cpu">0%</div>
-      <div class="kpi-sub">n29 utilization</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">CPU .40</div>
-      <div class="kpi-value" id="kpi-cpu-n25">0%</div>
-      <div class="kpi-sub">n25 utilization</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">RAM</div>
-      <div class="kpi-value" id="kpi-ram">0%</div>
-      <div class="kpi-sub" id="kpi-ram-sub">0 GB used</div>
-    </div>
     <div class="kpi-card highlight">
       <div class="kpi-label">Volume Processed</div>
       <div class="kpi-value" id="kpi-vol">0</div>
@@ -319,15 +304,13 @@
     <!-- Chart 1: GPU / CPU Utilization -->
     <div class="chart-card full-width">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div class="chart-title" style="margin:0">GPU Engine Active / CPU Utilization <span style="font-size:10px;color:var(--text-muted)">(1s DCGM profiling)</span></div>
+        <div class="chart-title" style="margin:0">GPU Engine Active <span style="font-size:10px;color:var(--text-muted)">(1s DCGM profiling)</span></div>
         <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">Scoring</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#9d6dd8">Triton</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,2)"><span style="color:#f0883e">Prep</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#d2691e">Training</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" onchange="toggleChartLine(utilChart,4)"><span style="color:#58a6ff">CPU .44</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" onchange="toggleChartLine(utilChart,5)"><span style="color:#39d353">CPU .40</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,6)"><span style="color:#e3b341">FB ms</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,4)"><span style="color:#e3b341">FB ms</span></label>
         </div>
       </div>
       <div class="chart-container" style="height:220px"><canvas id="util-chart"></canvas></div>
@@ -447,7 +430,6 @@ const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
 // Time-series history buffers
 const history = {
   gpu_n29_0: [], gpu_n29_1: [], gpu_n25_0: [], gpu_n25_1: [],
-  cpu_n29: [], cpu_n25: [],
   tx: [], fbLatency: [], labels: []
 };
 
@@ -521,8 +503,6 @@ function makeUtilChart() {
         { label: 'Triton',  data: [], borderColor: '#9d6dd8', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'Prep',     data: [], borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'Training', data: [], borderColor: '#d2691e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'CPU .44',  data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y', hidden: true },
-        { label: 'CPU .40',  data: [], borderColor: '#39d353', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y', hidden: true },
         { label: 'FB ms',     data: [], borderColor: '#e3b341', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, borderDash: [4,2], yAxisID: 'yFb' },
       ]
     },
@@ -666,11 +646,6 @@ function updateDashboard(data) {
 
   // System KPIs
   const sys = data.system || {};
-  document.getElementById('kpi-cpu').textContent = (sys.cpu_percent_n29 || sys.cpu_percent || 0).toFixed(1) + '%';
-  const cpuN25El = document.getElementById('kpi-cpu-n25');
-  if (cpuN25El) cpuN25El.textContent = (sys.cpu_percent_n25 || 0).toFixed(1) + '%';
-  document.getElementById('kpi-ram').textContent = (sys.ram_percent || 0).toFixed(1) + '%';
-  document.getElementById('kpi-ram-sub').textContent = (sys.ram_used_gb || 0).toFixed(1) + ' GB used';
 
   // GPU KPIs (per-GPU from DCGM — max over rolling window)
   const gpu = data.gpu || {};
@@ -702,10 +677,6 @@ function updateDashboard(data) {
   const fb = data.flashblade || {};
   const fbNfsOps = fb.avg_latency_ms || 0;
 
-  // CPU values for both nodes
-  const cpuN29 = sys.cpu_percent_n29 || sys.cpu_percent || 0;
-  const cpuN25 = sys.cpu_percent_n25 || 0;
-
   // Update time-series history
   const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
   // prep_rows_per_sec from business KPIs (GPU processing rate)
@@ -717,8 +688,6 @@ function updateDashboard(data) {
   pushHistory(history.gpu_n29_1, gpuRt.gpu_n29_1_util_pct || 0);
   pushHistory(history.gpu_n25_0, gpuRt.gpu_n25_0_util_pct || 0);
   pushHistory(history.gpu_n25_1, gpuRt.gpu_n25_1_util_pct || 0);
-  pushHistory(history.cpu_n29, cpuN29);
-  pushHistory(history.cpu_n25, cpuN25);
   pushHistory(history.tx, txRate);
   pushHistory(history.fbLatency, fbNfsOps);
   pushHistory(history.labels, now);
@@ -732,9 +701,7 @@ function updateDashboard(data) {
     utilChart.data.datasets[1].data = [...history.gpu_n29_1];
     utilChart.data.datasets[2].data = [...history.gpu_n25_0];
     utilChart.data.datasets[3].data = [...history.gpu_n25_1];
-    utilChart.data.datasets[4].data = [...history.cpu_n29];
-    utilChart.data.datasets[5].data = [...history.cpu_n25];
-    utilChart.data.datasets[6].data = [...history.fbLatency];
+    utilChart.data.datasets[4].data = [...history.fbLatency];
     utilChart.update('none');
   }
 
@@ -1116,11 +1083,6 @@ function _clearDashboard() {
   document.getElementById('kpi-fraud-rate').textContent = '0%';
   const dlResetEl = document.getElementById('kpi-decision-latency');
   if (dlResetEl) dlResetEl.textContent = '—';
-  document.getElementById('kpi-cpu').textContent = '0%';
-  const cpuN25El = document.getElementById('kpi-cpu-n25');
-  if (cpuN25El) cpuN25El.textContent = '0%';
-  document.getElementById('kpi-ram').textContent = '0%';
-  document.getElementById('kpi-ram-sub').textContent = '0 GB used';
   ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
     document.getElementById(id).textContent = '0%';
   });
@@ -1130,7 +1092,6 @@ function _clearDashboard() {
   ['kpi-f1','kpi-auc-pr','kpi-prec','kpi-recall'].forEach(id => { document.getElementById(id).textContent = '—'; });
   history.gpu_n29_0.length = 0; history.gpu_n29_1.length = 0;
   history.gpu_n25_0.length = 0; history.gpu_n25_1.length = 0;
-  history.cpu_n29.length = 0; history.cpu_n25.length = 0;
   history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
   updateLineChart(txChart, [], []);
   if (utilChart) { utilChart.data.labels = []; utilChart.data.datasets.forEach(ds => ds.data = []); utilChart.update('none'); }
