@@ -711,10 +711,12 @@ function updateDashboard(data) {
   // prep_rows_per_sec from business KPIs (GPU processing rate)
   const txRate = biz.prep_rows_per_sec || 0;
 
-  pushHistory(history.gpu_n29_0, gn29_0);
-  pushHistory(history.gpu_n29_1, gn29_1);
-  pushHistory(history.gpu_n25_0, gn25_0);
-  pushHistory(history.gpu_n25_1, gn25_1);
+  // Chart uses real-time instant values (not max-window) so spikes are visible
+  const gpuRt = data.gpu_rt || {};
+  pushHistory(history.gpu_n29_0, gpuRt.gpu_n29_0_util_pct || 0);
+  pushHistory(history.gpu_n29_1, gpuRt.gpu_n29_1_util_pct || 0);
+  pushHistory(history.gpu_n25_0, gpuRt.gpu_n25_0_util_pct || 0);
+  pushHistory(history.gpu_n25_1, gpuRt.gpu_n25_1_util_pct || 0);
   pushHistory(history.cpu_n29, cpuN29);
   pushHistory(history.cpu_n25, cpuN25);
   pushHistory(history.tx, txRate);

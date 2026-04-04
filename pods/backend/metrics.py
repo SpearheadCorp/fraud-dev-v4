@@ -200,6 +200,7 @@ class MetricsCollector:
             "flashblade": flashblade,
             "system":    system,
             "gpu":       gpu,
+            "gpu_rt":    self._collect_gpu_rt(),
             "gpu_window_s": self._gpu_window,
         }
 
@@ -218,6 +219,7 @@ class MetricsCollector:
             "timestamp":   time.time(),
             "system":    system,
             "gpu":       gpu,
+            "gpu_rt":    self._collect_gpu_rt(),
             "gpu_window_s": self._gpu_window,
             "flashblade": flashblade,
             "fraud":     fraud,
@@ -543,6 +545,36 @@ class MetricsCollector:
             return metrics
         except Exception as exc:
             log.warning("_collect_gpu failed: %s", exc)
+            return self._gpu_zeros()
+
+    def _collect_gpu_rt(self) -> dict:
+        """Instant (real-time) GPU util for chart — no max_over_time window.
+        Uses the same metric/fallback logic as _collect_gpu() but queries
+        the current value so the chart shows live spikes."""
+        try:
+            metrics: dict = {}
+            for metric_name, key_prefix, scale in [
+                ("DCGM_FI_PROF_GR_ENGINE_ACTIVE", "gpu_{host}_{gpu}_util_pct", 100.0),
+                ("DCGM_FI_DEV_GPU_UTIL",          "gpu_{host}_{gpu}_util_pct", 1.0),
+                ("DCGM_FI_DEV_MEM_COPY_UTIL",     "gpu_{host}_{gpu}_mem_pct",  1.0),
+            ]:
+                if metric_name == "DCGM_FI_DEV_GPU_UTIL":
+                    if any(k.endswith("_util_pct") for k in metrics):
+                        continue
+                resp = requests.get(
+                    f"{PROMETHEUS_URL}/api/v1/query",
+                    params={"query": metric_name}, timeout=3,
+                )
+                resp.raise_for_status()
+                for result in resp.json().get("data", {}).get("result", []):
+                    gpu_id = result.get("metric", {}).get("gpu", "0")
+                    hostname = result.get("metric", {}).get("Hostname", "unknown")
+                    short = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
+                    key = key_prefix.format(host=short, gpu=gpu_id)
+                    metrics[key] = float(result["value"][1]) * scale
+            return metrics if metrics else self._gpu_zeros()
+        except Exception as exc:
+            log.warning("_collect_gpu_rt failed: %s", exc)
             return self._gpu_zeros()
 
     @staticmethod

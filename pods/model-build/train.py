@@ -65,8 +65,16 @@ FEATURE_COLS = [
     "is_night", "distance_km", "category_encoded", "state_encoded",
     "gender_encoded", "city_pop_log", "zip_region", "amt", "lat", "long",
     "city_pop", "unix_time", "merch_lat", "merch_long", "merch_zipcode", "zip",
+    # Per-customer features
+    "cust_txn_count", "cust_amt_mean", "cust_amt_std", "cust_velocity",
+    # Per-category features
+    "cat_amt_mean", "cat_amt_std", "cat_count", "cat_amt_zscore",
+    # Per-merchant features
+    "merch_txn_count", "merch_amt_mean", "merch_amt_std", "merch_amt_zscore",
+    # Percentile ranks
+    "amt_rank", "distance_rank",
 ]
-N_TABULAR = len(FEATURE_COLS)  # 21
+N_TABULAR = len(FEATURE_COLS)  # 35
 
 XGB_PARAMS = {
     "max_depth": 8,
@@ -240,7 +248,6 @@ class TritonPythonModel:
         self.gnn.eval()
         self.booster = xgb.Booster()
         self.booster.load_model(str(model_dir / "embedding_xgboost.json"))
-        self.booster.set_param({"device": "cuda:0"})
 
     def execute(self, requests):
         responses = []
