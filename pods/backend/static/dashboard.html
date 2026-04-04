@@ -428,6 +428,7 @@ let ws = null;
 let wsConnected = false;
 let shapLoaded = false;
 let modelTabOpened = false;
+let _prevIsRunning = null;
 const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
 
 // Time-series history buffers
@@ -602,6 +603,18 @@ function updateDashboard(data) {
   startBtn.disabled = isRunning;
   document.getElementById('stop-btn').disabled = !isRunning;
   if (!isRunning) stopPodPolling();
+
+  // On running→stopped transition: clear the Transaction Volume chart so it drops to zero immediately
+  if (_prevIsRunning === true && !isRunning) {
+    history.tx.length = 0; history.labels.length = 0;
+    updateLineChart(txChart, [], []);
+    if (tputLatChart) {
+      tputLatChart.data.labels = [];
+      tputLatChart.data.datasets.forEach(ds => ds.data = []);
+      tputLatChart.update('none');
+    }
+  }
+  _prevIsRunning = isRunning;
 
   // Dim business KPI tiles when stopped — values are preserved as final run summary
   const BIZ_KPI_IDS = ['kpi-exposure','kpi-txns','kpi-flagged','kpi-fraud-rate','kpi-total-amt','kpi-decision-latency','kpi-vol'];
