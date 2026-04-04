@@ -425,6 +425,7 @@ let ws = null;
 let wsConnected = false;
 let shapLoaded = false;
 let modelTabOpened = false;
+let _prevIsRunning = null;
 const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
 
 // Time-series history buffers
@@ -599,6 +600,26 @@ function updateDashboard(data) {
   startBtn.disabled = isRunning;
   document.getElementById('stop-btn').disabled = !isRunning;
   if (!isRunning) stopPodPolling();
+
+  // On running→stopped transition: immediately zero GPU KPI tiles and clear chart history
+  // so utilization drops to 0 at once instead of holding the last high value
+  if (_prevIsRunning === true && !isRunning) {
+    ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
+      document.getElementById(id).textContent = '0.0%';
+    });
+    ['kpi-gpu-n29-0-mem','kpi-gpu-n29-1-mem','kpi-gpu-n25-0-mem','kpi-gpu-n25-1-mem'].forEach(id => {
+      document.getElementById(id).textContent = '0.0% mem';
+    });
+    history.gpu_n29_0.length = 0; history.gpu_n29_1.length = 0;
+    history.gpu_n25_0.length = 0; history.gpu_n25_1.length = 0;
+    history.labels.length = 0;
+    if (utilChart) {
+      utilChart.data.labels = [];
+      utilChart.data.datasets.forEach(ds => ds.data = []);
+      utilChart.update('none');
+    }
+  }
+  _prevIsRunning = isRunning;
 
   // Env badge
   const envInline = document.getElementById('env-inline');
