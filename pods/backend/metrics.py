@@ -172,7 +172,7 @@ class MetricsCollector:
         if self.state.is_running:
             self._update_fraud_metrics()
         system     = self._collect_system()
-        gpu        = self._collect_gpu()
+        gpu        = self._collect_gpu()        if self.state.is_running else self._gpu_zeros()
         business   = self._compute_kpis(telemetry)
         storage    = self._collect_storage()
         flashblade = self._collect_flashblade()
@@ -200,7 +200,7 @@ class MetricsCollector:
             "flashblade": flashblade,
             "system":    system,
             "gpu":       gpu,
-            "gpu_rt":    self._collect_gpu_rt(),
+            "gpu_rt":    self._collect_gpu_rt() if self.state.is_running else self._gpu_zeros(),
             "gpu_window_s": self._gpu_window,
         }
 
@@ -210,7 +210,7 @@ class MetricsCollector:
         Also includes fraud metrics via TTL cache so category/geo data
         refreshes every 5s independent of the slow full collect() cycle."""
         system     = self._collect_system()
-        gpu        = self._collect_gpu()
+        gpu        = self._collect_gpu()        if self.state.is_running else self._gpu_zeros()
         flashblade = self._collect_flashblade()
         fraud      = self._collect_fraud_metrics() if self.state.is_running else {}
         return {
@@ -219,7 +219,7 @@ class MetricsCollector:
             "timestamp":   time.time(),
             "system":    system,
             "gpu":       gpu,
-            "gpu_rt":    self._collect_gpu_rt(),
+            "gpu_rt":    self._collect_gpu_rt() if self.state.is_running else self._gpu_zeros(),
             "gpu_window_s": self._gpu_window,
             "flashblade": flashblade,
             "fraud":     fraud,
