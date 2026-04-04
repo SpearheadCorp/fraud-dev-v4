@@ -18,6 +18,7 @@ import signal
 import threading
 from pathlib import Path
 
+import requests
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
@@ -65,6 +66,7 @@ threading.Thread(target=_liveness_heartbeat, daemon=True, name="liveness").start
 # ---------------------------------------------------------------------------
 INPUT_PATH      = Path(os.environ.get("INPUT_PATH",      "/data/features"))
 MODEL_REPO      = Path(os.environ.get("MODEL_REPO",      "/data/models"))
+TRITON_HTTP_URL = os.environ.get("TRITON_HTTP_URL",      "http://triton:8000")
 MAX_FILES        = int(os.environ.get("MAX_FILES",        "200"))
 MIN_NEW_FILES    = int(os.environ.get("MIN_NEW_FILES",    "20"))
 TRAIN_INTERVAL_SEC = int(os.environ.get("TRAIN_INTERVAL_SEC", "60"))
@@ -283,6 +285,17 @@ class TritonPythonModel:
 '''
 
 
+def _reload_triton_model(model_name: str) -> None:
+    """Tell Triton to unload then reload the model so it picks up new artifacts."""
+    try:
+        base = TRITON_HTTP_URL.rstrip("/")
+        requests.post(f"{base}/v2/repository/models/{model_name}/unload", timeout=10)
+        requests.post(f"{base}/v2/repository/models/{model_name}/load",   timeout=30)
+        log.info("[TRITON] Hot-reloaded model '%s'", model_name)
+    except Exception as exc:
+        log.warning("[TRITON] Hot-reload failed for '%s': %s", model_name, exc)
+
+
 def write_python_backend_config(model_dir: Path, model_name: str, kind: str) -> None:
     config = f"""name: "{model_name}"
 backend: "python"
@@ -466,6 +479,7 @@ def run_training_cycle(chunk_files: list, cycle_num: int) -> dict:
     gpu_model.get_booster().save_model(str(version_dir / "embedding_xgboost.json"))
     torch.save(gnn_state_dict, str(version_dir / "state_dict_gnn.pth"))
     log.info("[CYCLE %d] Model artifacts written to %s", cycle_num, model_dir)
+    _reload_triton_model(model_name)
 
     # Save SHAP + training metrics
     shap_path = MODEL_REPO / "shap_summary.json"
