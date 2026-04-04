@@ -170,12 +170,12 @@
 <body>
 
 <header>
-  <img id="logo-customer" alt="" style="height:32px;display:none;margin-right:12px;object-fit:contain">
-  <h1 id="page-title">Fraud Detection Demo v4 — GNN + XGBoost</h1>
+  <img id="logo-customer" alt="" style="height:32px;display:none;object-fit:contain">
+  <img id="logo-nvidia" alt="" style="height:22px;display:none;margin-left:10px;opacity:0.85;object-fit:contain">
+  <h1 id="page-title" style="margin-left:12px;">Fraud Detection Demo v4 — GNN + XGBoost</h1>
   <div id="liveness-badge" class="live-badge connecting"><div class="live-dot"></div><span id="liveness-text">Connecting...</span></div>
   <span class="elapsed"><span id="elapsed">00:00:00</span> elapsed <span id="env-inline"></span></span>
   <div class="header-right">
-    <img id="logo-nvidia" alt="" style="height:22px;display:none;margin-right:12px;object-fit:contain">
     <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
     <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
     <button class="btn-secondary" id="reset-btn" onclick="resetPipeline()">↺ Reset</button>
@@ -274,12 +274,12 @@
 <div id="tab-infra" class="tab-pane">
   <div class="kpi-row">
     <div class="kpi-card accent">
-      <div class="kpi-label">Generate <span style="font-size:9px;color:var(--text-muted)">n29-0 .44</span></div>
+      <div class="kpi-label">Scoring <span style="font-size:9px;color:var(--text-muted)">n29-0 .44</span></div>
       <div class="kpi-value" id="kpi-gpu-n29-0">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n29-0-mem">0% mem</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">Score <span style="font-size:9px;color:var(--text-muted)">n29-1 .44</span></div>
+      <div class="kpi-label">Triton <span style="font-size:9px;color:var(--text-muted)">n29-1 .44</span></div>
       <div class="kpi-value" id="kpi-gpu-n29-1">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n29-1-mem">0% mem</div>
     </div>
@@ -321,8 +321,8 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div class="chart-title" style="margin:0">GPU Engine Active / CPU Utilization <span style="font-size:10px;color:var(--text-muted)">(1s DCGM profiling)</span></div>
         <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">Generate</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#9d6dd8">Score</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">Scoring</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#9d6dd8">Triton</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,2)"><span style="color:#f0883e">Prep</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#d2691e">Training</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" onchange="toggleChartLine(utilChart,4)"><span style="color:#58a6ff">CPU .44</span></label>
@@ -517,8 +517,8 @@ function makeUtilChart() {
     data: {
       labels: [],
       datasets: [
-        { label: 'Generate', data: [], borderColor: '#bc8cff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'Score',    data: [], borderColor: '#9d6dd8', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Scoring', data: [], borderColor: '#bc8cff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Triton',  data: [], borderColor: '#9d6dd8', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'Prep',     data: [], borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'Training', data: [], borderColor: '#d2691e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'CPU .44',  data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y', hidden: true },
@@ -672,20 +672,26 @@ function updateDashboard(data) {
   document.getElementById('kpi-ram').textContent = (sys.ram_percent || 0).toFixed(1) + '%';
   document.getElementById('kpi-ram-sub').textContent = (sys.ram_used_gb || 0).toFixed(1) + ' GB used';
 
-  // GPU KPIs (per-GPU from DCGM)
+  // GPU KPIs (per-GPU from DCGM — max over rolling window)
   const gpu = data.gpu || {};
+  const gpuWin = data.gpu_window_s || 30;
   const gn29_0 = gpu.gpu_n29_0_util_pct || 0;
   const gn29_1 = gpu.gpu_n29_1_util_pct || 0;
   const gn25_0 = gpu.gpu_n25_0_util_pct || 0;
   const gn25_1 = gpu.gpu_n25_1_util_pct || 0;
   document.getElementById('kpi-gpu-n29-0').textContent = gn29_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_n29_0_mem_pct || 0).toFixed(1) + '% mem';
+  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_n29_0_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   document.getElementById('kpi-gpu-n29-1').textContent = gn29_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_n29_1_mem_pct || 0).toFixed(1) + '% mem';
+  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_n29_1_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   document.getElementById('kpi-gpu-n25-0').textContent = gn25_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_n25_0_mem_pct || 0).toFixed(1) + '% mem';
+  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_n25_0_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   document.getElementById('kpi-gpu-n25-1').textContent = gn25_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_n25_1_mem_pct || 0).toFixed(1) + '% mem';
+  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_n25_1_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
+  // Dim tiles when all GPU values are zero (metrics unavailable vs. GPU idle)
+  const allGpuZero = [gn29_0, gn29_1, gn25_0, gn25_1].every(v => v === 0);
+  ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
+    document.getElementById(id).style.color = allGpuZero ? 'var(--text-muted)' : '';
+  });
 
   // Volume processed (infra tab)
   const totalTx = biz.total_transactions || 0;
@@ -705,10 +711,12 @@ function updateDashboard(data) {
   // prep_rows_per_sec from business KPIs (GPU processing rate)
   const txRate = biz.prep_rows_per_sec || 0;
 
-  pushHistory(history.gpu_n29_0, gn29_0);
-  pushHistory(history.gpu_n29_1, gn29_1);
-  pushHistory(history.gpu_n25_0, gn25_0);
-  pushHistory(history.gpu_n25_1, gn25_1);
+  // Chart uses real-time instant values (not max-window) so spikes are visible
+  const gpuRt = data.gpu_rt || {};
+  pushHistory(history.gpu_n29_0, gpuRt.gpu_n29_0_util_pct || 0);
+  pushHistory(history.gpu_n29_1, gpuRt.gpu_n29_1_util_pct || 0);
+  pushHistory(history.gpu_n25_0, gpuRt.gpu_n25_0_util_pct || 0);
+  pushHistory(history.gpu_n25_1, gpuRt.gpu_n25_1_util_pct || 0);
   pushHistory(history.cpu_n29, cpuN29);
   pushHistory(history.cpu_n25, cpuN25);
   pushHistory(history.tx, txRate);

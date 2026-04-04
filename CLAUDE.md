@@ -10,10 +10,10 @@ GPU-accelerated fraud detection demo pipeline running on Kubernetes with NVIDIA 
 
 **Branch-based isolation** — the Makefile and manual commands auto-target the right environment:
 
-| Branch | Namespace | NodePort | Image tag | Dashboard |
-|--------|-----------|----------|-----------|-----------|
-| `main` | `fraud-det-v31` | `30880` | `latest` | `http://10.23.181.44:30880` |
-| `dev`  | `fraud-det-dev`  | `30881` | `dev`    | `http://10.23.181.44:30881` |
+| Branch | Namespace       | NodePort | Image tag | Dashboard                   |
+| ------ | --------------- | -------- | --------- | --------------------------- |
+| `main` | `fraud-det-v31` | `30880`  | `latest`  | `http://10.23.181.44:30880` |
+| `dev`  | `fraud-det-dev` | `30881`  | `dev`     | `http://10.23.181.44:30881` |
 
 Build VM (all image builds happen here): `tduser@10.23.181.247`
 
@@ -23,16 +23,17 @@ Build VM (all image builds happen here): `tduser@10.23.181.247`
 
 ### Branch roles
 
-| Branch | Role |
-|--------|------|
-| `main` | Production — always deployable, only branch pushed to remote origin |
-| `dev` | Integration branch for completed feature/bugfix work |
-| `feature/<desc>` | Created off `dev`, merged back to `dev` via PR |
-| `bugfix/<desc>` | Non-urgent fix — created off `dev`, merged back to `dev` via PR |
-| `hotfix/<desc>` | Urgent production fix — created off `main`, merged to `main` via PR, then cherry-picked into `dev` |
-| `release/<version>` | Stabilization branch cut from `dev`, merged into `main` via PR |
+| Branch              | Role                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `main`              | Production — always deployable, only branch pushed to remote origin                                |
+| `dev`               | Integration branch for completed feature/bugfix work                                               |
+| `feature/<desc>`    | Created off `dev`, merged back to `dev` via PR                                                     |
+| `bugfix/<desc>`     | Non-urgent fix — created off `dev`, merged back to `dev` via PR                                    |
+| `hotfix/<desc>`     | Urgent production fix — created off `main`, merged to `main` via PR, then cherry-picked into `dev` |
+| `release/<version>` | Stabilization branch cut from `dev`, merged into `main` via PR                                     |
 
 ### PR rules
+
 - **All merges are done via GitHub PRs** — never `git merge` locally
 - PRs into `main` require review + CI pass
 - `feature/*` and `bugfix/*` → PR into `dev`
@@ -42,6 +43,7 @@ Build VM (all image builds happen here): `tduser@10.23.181.247`
 ### Quick reference
 
 **Feature / Bugfix (dev)**
+
 ```bash
 git switch dev
 git switch -c feature/<desc>   # or bugfix/<desc>
@@ -51,6 +53,7 @@ gh pr create --base dev --head feature/<desc> --title "feat: ..." --body "..."
 ```
 
 **Hotfix (production)**
+
 ```bash
 git switch main && git pull origin main
 git switch -c hotfix/<desc>
@@ -63,6 +66,7 @@ git cherry-pick <fix-commit-sha>
 ```
 
 **Release (dev → main)**
+
 ```bash
 git switch dev
 git switch -c release/<version>
@@ -75,14 +79,18 @@ git cherry-pick <release-fix-shas>
 ```
 
 ### Commit prefixes
+
 `feat:` · `fix:` · `chore:` · `refactor:`
 
 ### Build VM remote setup
+
 The build VM (`tduser@10.23.181.247`) has two remotes:
+
 - `origin` → `https://github.com/SpearheadCorp/fraud-dev-v31.git`
 - `v4` → `https://github.com/SpearheadCorp/fraud-dev-v4.git`
 
 To pull a branch from v4 on the build VM:
+
 ```bash
 git fetch v4 && git checkout -b <branch> v4/<branch>
 # or if branch exists locally:
@@ -122,14 +130,14 @@ make logs     # stream backend logs
 
 ### Which pods need rebuilding?
 
-| Changed files | Action |
-|---------------|--------|
-| `pods/backend/**` | Rebuild `backend` |
-| `pods/scoring/**` | Rebuild `scoring` |
-| `pods/data-prep/**` | Rebuild `data-prep` |
-| `pods/model-train/**` | Rebuild `model-train` |
-| `pods/triton/**` | Rebuild `triton` |
-| `pods/data-gather/**` | Rebuild `data-gather` |
+| Changed files               | Action                                                 |
+| --------------------------- | ------------------------------------------------------ |
+| `pods/backend/**`           | Rebuild `backend`                                      |
+| `pods/scoring/**`           | Rebuild `scoring`                                      |
+| `pods/data-prep/**`         | Rebuild `data-prep`                                    |
+| `pods/model-train/**`       | Rebuild `model-train`                                  |
+| `pods/triton/**`            | Rebuild `triton`                                       |
+| `pods/data-gather/**`       | Rebuild `data-gather`                                  |
 | `k8s/deployments.yaml` only | **No rebuild** — just reapply manifests + restart pods |
 
 ### Step 1 — Free space on build VM (if needed)
@@ -206,14 +214,14 @@ curl -X POST http://10.23.181.44:30881/api/control/reset
 
 ### Common issues
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `No space left on device` on build VM | Docker image cache full | `docker rmi` the pod being rebuilt + `docker builder prune -f` (never use `docker image prune -a` — deletes prod images too) |
-| Pod stuck `Pending` | GPU still held by old pod | `kubectl delete pod -l app=<pod> -n fraud-det-dev --force --grace-period=0` |
-| `CreateContainerError` on node .40 | containerd snapshot corruption | Stop kubelet+containerd, `rm -rf /var/lib/containerd/*`, restart both |
-| Scoring `RESOURCE_EXHAUSTED` gRPC errors | GNN payload exceeds 2GB gRPC limit | `BATCH_FILES` must stay ≤ 2 in deployments.yaml — larger values exceed gRPC's 2GB message cap |
-| FBms not showing on dashboard | `FLASHBLADE_API_TOKEN` missing | Verify env var is set in backend deployment in deployments.yaml |
-| Triton crashes immediately showing help text | Unknown CLI flag passed | Check triton deployment for invalid command overrides in deployments.yaml |
+| Symptom                                      | Cause                              | Fix                                                                                                                          |
+| -------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `No space left on device` on build VM        | Docker image cache full            | `docker rmi` the pod being rebuilt + `docker builder prune -f` (never use `docker image prune -a` — deletes prod images too) |
+| Pod stuck `Pending`                          | GPU still held by old pod          | `kubectl delete pod -l app=<pod> -n fraud-det-dev --force --grace-period=0`                                                  |
+| `CreateContainerError` on node .40           | containerd snapshot corruption     | Stop kubelet+containerd, `rm -rf /var/lib/containerd/*`, restart both                                                        |
+| Scoring `RESOURCE_EXHAUSTED` gRPC errors     | GNN payload exceeds 2GB gRPC limit | `BATCH_FILES` must stay ≤ 2 in deployments.yaml — larger values exceed gRPC's 2GB message cap                                |
+| FBms not showing on dashboard                | `FLASHBLADE_API_TOKEN` missing     | Verify env var is set in backend deployment in deployments.yaml                                                              |
+| Triton crashes immediately showing help text | Unknown CLI flag passed            | Check triton deployment for invalid command overrides in deployments.yaml                                                    |
 
 ## Pipeline Control
 
@@ -234,6 +242,7 @@ Uses Docker named volumes instead of NFS. GPU allocation via `resources.reservat
 **Pre-demo (offline):** `data-gather` generates ~750 parquet files (5M rows each) → `/data/raw` (500Gi NFS)
 
 **Live demo pipeline:**
+
 ```
 data-prep (GPU) → /data/features → scoring (GPU) → Triton (GPU)
                                └→ model-train (GPU) → /data/models → Triton (hot-reload)
@@ -243,19 +252,20 @@ All pipeline coordination is via **atomic NFS rename** — a pod claims a file b
 
 ### Pod Responsibilities
 
-| Pod | GPU | Role |
-|-----|-----|------|
+| Pod           | GPU           | Role                                         |
+| ------------- | ------------- | -------------------------------------------- |
 | `data-gather` | Node .40 GPU0 | Synthetic transaction generation (cuDF/cuPy) |
-| `data-prep` | Node .44 GPU0 | Feature engineering mega-batch (cuDF) |
-| `model-train` | Node .40 GPU0 | Continuous GraphSAGE + XGBoost retraining |
-| `triton` | Node .44 GPU1 | Model serving via Triton Python backend |
-| `scoring` | Node .40 GPU1 | Batch fraud scoring via Triton inference |
-| `backend` | CPU only | FastAPI control plane + WebSocket dashboard |
-| `model-build` | K8s Job | One-shot initial model build (pre-demo) |
+| `data-prep`   | Node .44 GPU0 | Feature engineering mega-batch (cuDF)        |
+| `model-train` | Node .40 GPU0 | Continuous GraphSAGE + XGBoost retraining    |
+| `triton`      | Node .44 GPU1 | Model serving via Triton Python backend      |
+| `scoring`     | Node .40 GPU1 | Batch fraud scoring via Triton inference     |
+| `backend`     | CPU only      | FastAPI control plane + WebSocket dashboard  |
+| `model-build` | K8s Job       | One-shot initial model build (pre-demo)      |
 
 ### Key Design: Persistent GPU Worker Subprocess
 
 `data-prep` splits into two processes to avoid cuDF SIGSEGV crashes from CUDA context reuse:
+
 - `prepare.py` — orchestrator, file-queue management, spawns worker via `subprocess.Popen`
 - `gpu_worker.py` — long-lived GPU worker in isolated CUDA context, receives jobs via stdin JSON, responds via stdout JSON
 
@@ -264,6 +274,7 @@ When adding GPU processing logic to `data-prep`, all cuDF/cuPy operations must g
 ### ML Model
 
 GraphSAGE (2-layer GNN) + XGBoost ensemble:
+
 - Graph captures tri-partite relationships: `card → merchant`, `card → transaction`, `merchant → transaction`
 - XGBoost uses GNN embeddings + tabular features
 - Triton serves both via a single Python backend (`pods/triton/`) that loads from `/data/models`
@@ -271,6 +282,7 @@ GraphSAGE (2-layer GNN) + XGBoost ensemble:
 ### Backend Metrics Architecture
 
 `pods/backend/metrics.py` collects from three sources:
+
 1. **Kubernetes API** — pod status, replica counts
 2. **Prometheus** — DCGM GPU metrics, pipeline throughput
 3. **FlashBlade REST API** — NFS read/write latency
@@ -279,12 +291,12 @@ Metrics are broadcast to all WebSocket clients every 200ms.
 
 ## NFS Storage Layout
 
-| Mount | Size | Consumer |
-|-------|------|----------|
-| `/data/raw` | 500Gi | data-gather writes, data-prep reads |
-| `/data/features` | 100Gi | data-prep writes, scoring + model-train read |
-| `/data/scores` | 100Gi | scoring writes |
-| `/data/models` | 50Gi | model-train + model-build write, triton reads |
+| Mount            | Size  | Consumer                                      |
+| ---------------- | ----- | --------------------------------------------- |
+| `/data/raw`      | 500Gi | data-gather writes, data-prep reads           |
+| `/data/features` | 100Gi | data-prep writes, scoring + model-train read  |
+| `/data/scores`   | 100Gi | scoring writes                                |
+| `/data/models`   | 50Gi  | model-train + model-build write, triton reads |
 
 All volumes are `ReadWriteMany` (NFS). PV/PVC defined in `k8s/storage.yaml`.
 
@@ -310,23 +322,3 @@ All volumes are `ReadWriteMany` (NFS). PV/PVC defined in `k8s/storage.yaml`.
 - **Backend:** FastAPI 0.110+, Uvicorn, websockets 12.0+
 - **Dashboard:** Single HTML file with Chart.js (CDN, no build step)
 - **Base images:** `nvcr.io/nvidia/rapidsai/base:24.12-cuda12.0-py3.11` for GPU pods; `python:3.11-slim` for backend
-
-<!-- keel:project:start -->
-<!-- auto-generated by keel · 2026-04-03 11:08 UTC · do not edit this block -->
-## Project Decisions (fraud-dev-v4)
-**Dynamic UI config**: Uses Kubernetes ConfigMap to serve JSON for titles, logos, and customer-facing copy, enabling runtime updates without image rebuilds to reduce operational friction.
-**Fraud metrics refresh**: Runs `collect_fast()` every 200ms with a 5s cache TTL, decoupling fraud data updates from slow `collect()` cycles while minimizing overhead (24/25 calls return instantly).
-**DOM update optimization**: Implements change-detection guards (`_lastAlertsJson`, `_lastGeoJson`) to skip DOM rebuilds when data is unchanged, reducing CPU usage.
-**Category/geo refresh**: Targets 4-5s refresh intervals via optimizations (e.g., 5s TTL cache replacing mtime checks) to balance responsiveness and system load.
-**Loading states**: Adds CSV-integrated loading indicators for pod scoring to provide immediate feedback until fraud exposure data appears.
-**Metric formatting**: Applies dynamic, config-driven formatting (e.g., compact notation) to live dashboard metrics to balance visibility and readability.
-**GPU core pinning**: Explicitly extracts and documents GPU-CPU affinity configurations to optimize NUMA efficiency and parallelism.
-
-## Active Constraints
-**Live metrics vs. readability**: Uses compact formatting for large numbers in live dashboards, trading off full precision for visibility.
-**Refresh rate tradeoffs**: Targets 4-5s category/geo refreshes as a compromise between user experience and backend load.
-
-## Cross-Project Principles
-**Inline styles for immunity**: Converts UI elements (e.g., sidebars) to 100% inline styles with JS-driven hover/active states to prevent external CSS overrides.
-**Config-code separation**: Prioritizes runtime-configurable settings (JSON/ConfigMaps) over hardcoded values to enable zero-rebuild updates.
-<!-- keel:project:end -->

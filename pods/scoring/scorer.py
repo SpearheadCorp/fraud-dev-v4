@@ -330,11 +330,9 @@ def main() -> None:
         t_read = time.perf_counter() - t_read
         n_rows = len(mega_gdf)
 
-        # --- GPU feature extraction: fillna + column selection on GPU ---
+        # --- Transfer to CPU for graph building + Triton ---
         t_feat = time.perf_counter()
         avail = [c for c in FEATURE_COLS if c in mega_gdf.columns]
-        feat_gdf = mega_gdf[avail].fillna(0.0)
-        # Transfer to CPU numpy for Triton (cupy -> numpy)
         df = mega_gdf.to_arrow().to_pandas()
         t_feat = time.perf_counter() - t_feat
 

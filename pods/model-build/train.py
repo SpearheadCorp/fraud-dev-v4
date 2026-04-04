@@ -65,8 +65,16 @@ FEATURE_COLS = [
     "is_night", "distance_km", "category_encoded", "state_encoded",
     "gender_encoded", "city_pop_log", "zip_region", "amt", "lat", "long",
     "city_pop", "unix_time", "merch_lat", "merch_long", "merch_zipcode", "zip",
+    # Per-customer features
+    "cust_txn_count", "cust_amt_mean", "cust_amt_std", "cust_velocity",
+    # Per-category features
+    "cat_amt_mean", "cat_amt_std", "cat_count", "cat_amt_zscore",
+    # Per-merchant features
+    "merch_txn_count", "merch_amt_mean", "merch_amt_std", "merch_amt_zscore",
+    # Percentile ranks
+    "amt_rank", "distance_rank",
 ]
-N_TABULAR = len(FEATURE_COLS)  # 21
+N_TABULAR = len(FEATURE_COLS)  # 35
 
 XGB_PARAMS = {
     "max_depth": 8,
@@ -232,8 +240,9 @@ class TritonPythonModel:
     def initialize(self, args):
         model_dir = Path(args["model_repository"]) / args["model_version"]
         self.n_tabular = N_TABULAR
-        self.gnn = GraphSAGEFraud(N_TABULAR, GNN_HIDDEN, GNN_OUT)
-        state = torch.load(str(model_dir / "state_dict_gnn.pth"), map_location="cpu",
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.gnn = GraphSAGEFraud(N_TABULAR, GNN_HIDDEN, GNN_OUT).to(self.device)
+        state = torch.load(str(model_dir / "state_dict_gnn.pth"), map_location=self.device,
                            weights_only=True)
         self.gnn.load_state_dict(state)
         self.gnn.eval()
@@ -248,13 +257,13 @@ class TritonPythonModel:
             feature_mask  = pb_utils.get_input_tensor_by_name(request, "FEATURE_MASK").as_numpy().astype(bool)
             compute_shap  = bool(pb_utils.get_input_tensor_by_name(request, "COMPUTE_SHAP").as_numpy()[0])
 
-            x  = torch.tensor(node_features, dtype=torch.float32)
-            ei = torch.tensor(edge_index,    dtype=torch.long)
+            x  = torch.tensor(node_features, dtype=torch.float32).to(self.device)
+            ei = torch.tensor(edge_index,    dtype=torch.long).to(self.device)
             n_tx = int(feature_mask.sum())
 
             with torch.no_grad():
                 all_emb = self.gnn(x, ei)
-            emb     = all_emb[feature_mask].numpy()
+            emb     = all_emb[feature_mask].cpu().numpy()
             tabular = node_features[feature_mask]
             combined = np.concatenate([tabular, emb], axis=1).astype(np.float32)
 
@@ -537,7 +546,7 @@ def main() -> None:
     #   2. model.py       (Python backend code)
     #   3. embedding_xgboost.json  (XGBoost booster)
     #   4. state_dict_gnn.pth      (LAST — Triton start.sh polls this as readiness trigger)
-    gnn_state_dict = {k: v.cpu() for k, v in gnn_model.state_dict().items()}
+    gnn_state_dict = gnn_model.state_dict()
 
     for model_name, xgb_model_obj, kind in [
         ("fraud_gnn_gpu", gpu_model,  "KIND_GPU"),
