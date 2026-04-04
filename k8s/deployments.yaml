@@ -188,6 +188,8 @@ spec:
               value: "managed"
             - name: NUMBA_CACHE_DIR
               value: /data/features/.numba-cache
+            - name: WRITE_PIPES
+              value: "128"
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
