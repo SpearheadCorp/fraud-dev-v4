@@ -307,9 +307,9 @@
         <div class="chart-title" style="margin:0">GPU Engine Active <span style="font-size:10px;color:var(--text-muted)">(1s DCGM profiling)</span></div>
         <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">Scoring</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#9d6dd8">Triton</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#58a6ff">Triton</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,2)"><span style="color:#f0883e">Prep</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#d2691e">Training</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#3fb950">Training</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,4)"><span style="color:#e3b341">FB ms</span></label>
         </div>
       </div>
@@ -500,9 +500,9 @@ function makeUtilChart() {
       labels: [],
       datasets: [
         { label: 'Scoring', data: [], borderColor: '#bc8cff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'Triton',  data: [], borderColor: '#9d6dd8', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Triton',   data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'Prep',     data: [], borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'Training', data: [], borderColor: '#d2691e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Training', data: [], borderColor: '#3fb950', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'FB ms',     data: [], borderColor: '#e3b341', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, borderDash: [4,2], yAxisID: 'yFb' },
       ]
     },
@@ -664,8 +664,9 @@ function updateDashboard(data) {
   document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_training_mem_pct || 0).toFixed(1) + '% mem · max ' + gpuWin + 's';
   // Dim tiles when all GPU values are zero (metrics unavailable vs. GPU idle)
   const allGpuZero = [gScoring, gTriton, gPrep, gTraining].every(v => v === 0);
-  ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
-    document.getElementById(id).style.color = allGpuZero ? 'var(--text-muted)' : '';
+  const gpuTileColors = { 'kpi-gpu-n29-0': '#bc8cff', 'kpi-gpu-n29-1': '#58a6ff', 'kpi-gpu-n25-0': '#f0883e', 'kpi-gpu-n25-1': '#3fb950' };
+  Object.entries(gpuTileColors).forEach(([id, color]) => {
+    document.getElementById(id).style.color = allGpuZero ? 'var(--text-muted)' : color;
   });
 
   // Volume processed (infra tab)
