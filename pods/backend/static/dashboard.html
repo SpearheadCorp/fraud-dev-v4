@@ -670,6 +670,11 @@ function updateDashboard(data) {
   const s = String(e % 60).padStart(2, '0');
   document.getElementById('elapsed').textContent = `${h}:${m}:${s}`;
 
+  // Track first scoring batch for Phase 2 modal completion
+  if (!_firstBatchSeen && _phase2Active && (data.business || {}).fraud_exposure_usd > 0) {
+    _firstBatchSeen = true;
+  }
+
   // Business KPIs
   const biz = data.business || {};
   document.getElementById('kpi-exposure').textContent = fmtDollar(biz.fraud_exposure_usd || 0);
@@ -1205,14 +1210,20 @@ const SERVICE_LABELS = {
 };
 
 let podPollInterval = null;
+let _phase2Active = false;
+let _firstBatchSeen = false;
 
 function showPodModal() {
+  _phase2Active = false;
+  _firstBatchSeen = false;
   _ctlShow('Starting Pipeline...', 'Pods are scaling up — takes 20-60 s on first start');
   startPodPolling();
 }
 
 function hidePodModal() {
   if (_ctlTimer) { clearTimeout(_ctlTimer); _ctlTimer = null; }
+  _phase2Active = false;
+  _firstBatchSeen = false;
   document.getElementById('pod-modal-backdrop').classList.remove('visible');
   stopPodPolling();
   ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
@@ -1242,12 +1253,36 @@ function renderPodStatus(services, isRunning) {
 
   if (!isRunning) { hidePodModal(); return; }
 
+  // Phase 2: all pods ready, waiting for first scoring batch
+  if (_phase2Active) {
+    const scored = _firstBatchSeen;
+    _ctlRenderSteps([
+      { label: 'All pods ready',                      done: true,   active: false },
+      { label: 'Processing features & building graph', done: scored, active: !scored },
+      { label: 'First scoring batch complete',         done: scored, active: false },
+    ]);
+    if (scored) {
+      stopPodPolling();
+      _phase2Active = false;
+      _ctlDone('Pipeline Ready', 'First batch scored — dashboard is live.', 'View Dashboard', null);
+    }
+    return;
+  }
+
+  // Phase 1: show pod readiness chips
   _ctlRenderPods(services, Object.entries(SERVICE_LABELS), 'up');
 
   if (Object.keys(SERVICE_LABELS).every(k => services[k] === 'Ready')) {
-    stopPodPolling();
-    _ctlDone('All Pods Ready', 'Pipeline is running. Dismiss to view the dashboard.',
-             'All Ready — Dismiss', null);
+    _phase2Active = true;
+    document.getElementById('pod-modal-title').textContent = 'Warming Up...';
+    document.getElementById('pod-modal-title').style.color = 'var(--text)';
+    document.getElementById('pod-modal-sub').textContent = 'Pods ready — waiting for first scoring batch';
+    document.getElementById('pod-modal-dismiss').style.display = 'none';
+    _ctlRenderSteps([
+      { label: 'All pods ready',                      done: true,  active: false },
+      { label: 'Processing features & building graph', done: false, active: true },
+      { label: 'First scoring batch complete',         done: false, active: false },
+    ]);
   }
 }
 

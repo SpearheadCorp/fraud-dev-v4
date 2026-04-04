@@ -61,13 +61,15 @@ async def serve_dashboard():
 async def get_status():
     service_states = pl.get_service_states()
     replicas       = pl.get_replica_counts()
+    score_files    = len(list(SCORES_PATH.glob("*.parquet"))) if SCORES_PATH.exists() else 0
     return {
-        "is_running":  state.is_running,
-        "elapsed_sec": state.elapsed_sec,
-        "services":    service_states,
-        "replicas":    replicas,
-        "health":      pl.get_health_status(),
-        "env":         ENV_LABEL,
+        "is_running":        state.is_running,
+        "elapsed_sec":       state.elapsed_sec,
+        "services":          service_states,
+        "replicas":          replicas,
+        "health":            pl.get_health_status(),
+        "env":               ENV_LABEL,
+        "score_files_count": score_files,
     }
 
 
