@@ -24,7 +24,7 @@ data:
         "tooltip-kpi-fraud-rate":        "Percent of processed transactions currently classified as fraud.",
         "tooltip-kpi-total-amt":         "Total dollar amount scored during the current run.",
         "tooltip-kpi-decision-latency":  "Average scoring time per transaction based on the latest scoring batch.",
-        "tooltip-kpi-gpu-scoring":       "GPU utilization for the data-prep stage that builds model-ready features.",
+        "tooltip-kpi-gpu-scoring":       "GPU utilization for the scoring stage reading features and writing fraud scores.",
         "tooltip-kpi-gpu-triton":        "GPU utilization for the Triton inference service hosting the fraud model.",
         "tooltip-kpi-gpu-prep":          "GPU utilization for the data-prep stage that builds model-ready features.",
         "tooltip-kpi-gpu-training":      "GPU utilization for the model-train stage running GraphSAGE and XGBoost updates.",
