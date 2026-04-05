@@ -140,6 +140,31 @@
   .kpi-card.kpi-frozen .kpi-value { color: var(--text-muted) !important; opacity: 0.75; }
   .kpi-card.kpi-frozen .kpi-label::after { content: ' · STOPPED'; font-size: 9px; letter-spacing: 0.03em; }
 
+  /* KPI info icon + tooltip */
+  .kpi-label-row { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; }
+  .kpi-label-row .kpi-label { margin-bottom: 0; }
+  .kpi-info { position: relative; display: inline-flex; align-items: center; cursor: default; }
+  .kpi-info-icon {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--border); color: var(--text-muted);
+    font-size: 9px; font-weight: 700; line-height: 13px; text-align: center;
+    user-select: none; flex-shrink: 0;
+  }
+  .kpi-tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+    background: #1c2128; border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-size: 11px; line-height: 1.5;
+    padding: 8px 10px; width: 200px; white-space: normal;
+    pointer-events: none; z-index: 999;
+    transition: opacity 0.15s ease;
+  }
+  .kpi-tooltip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 5px solid transparent; border-top-color: var(--border);
+  }
+  .kpi-info:hover .kpi-tooltip { visibility: visible; opacity: 1; }
+
   /* Chart grid */
   .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
   .chart-card {
@@ -215,32 +240,50 @@
 <div id="tab-business" class="tab-pane active">
   <div class="kpi-row">
     <div class="kpi-card highlight">
-      <div class="kpi-label">Fraud Exposure</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Fraud Exposure</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-exposure"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-exposure">$0</div>
       <div class="kpi-sub">estimated at risk</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">Transactions</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Transactions</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-txns"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-txns">0</div>
       <div class="kpi-sub">processed this run</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Fraud Flagged</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Fraud Flagged</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-flagged"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-flagged">0</div>
       <div class="kpi-sub">detected by model</div>
     </div>
     <div class="kpi-card good">
-      <div class="kpi-label">Fraud Rate</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Fraud Rate</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-fraud-rate"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-fraud-rate">0%</div>
       <div class="kpi-sub">of transactions</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Total $ Processed</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Total $ Processed</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-total-amt"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-total-amt">$0</div>
       <div class="kpi-sub">transaction volume</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">Decision Latency</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Decision Latency</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-decision-latency"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-decision-latency">—</div>
       <div class="kpi-sub">time to process a transaction</div>
     </div>
@@ -284,27 +327,42 @@
 <div id="tab-infra" class="tab-pane">
   <div class="kpi-row">
     <div class="kpi-card accent">
-      <div class="kpi-label">Scoring <span style="font-size:9px;color:var(--text-muted)">n29-0 .44</span></div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Scoring <span style="font-size:9px;color:var(--text-muted)">n29-0 .44</span></div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-gpu-scoring"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-gpu-n29-0">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n29-0-mem">0% mem</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">Triton <span style="font-size:9px;color:var(--text-muted)">n29-1 .44</span></div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Triton <span style="font-size:9px;color:var(--text-muted)">n29-1 .44</span></div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-gpu-triton"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-gpu-n29-1">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n29-1-mem">0% mem</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">Prep <span style="font-size:9px;color:var(--text-muted)">n25-0 .40</span></div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Prep <span style="font-size:9px;color:var(--text-muted)">n25-0 .40</span></div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-gpu-prep"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-gpu-n25-0">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n25-0-mem">0% mem</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">Training <span style="font-size:9px;color:var(--text-muted)">n25-1 .40</span></div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Training <span style="font-size:9px;color:var(--text-muted)">n25-1 .40</span></div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-gpu-training"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-gpu-n25-1">0%</div>
       <div class="kpi-sub" id="kpi-gpu-n25-1-mem">0% mem</div>
     </div>
     <div class="kpi-card highlight">
-      <div class="kpi-label">Volume Processed</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Volume Processed</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-vol"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-vol">0</div>
       <div class="kpi-sub" id="kpi-vol-sub">transactions</div>
     </div>
@@ -343,15 +401,15 @@
     <div class="chart-title">Pipeline Stats</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;font-size:12px">
       <div>
-        <div style="color:#bc8cff;font-weight:600;margin-bottom:4px">Raw Queue</div>
+        <div style="display:flex;align-items:center;gap:5px;color:#bc8cff;font-weight:600;margin-bottom:4px">Raw Queue<div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-q-raw"></div></div></div>
         <div id="q-raw" style="color:var(--text-muted)">—</div>
       </div>
       <div>
-        <div style="color:#3fb950;font-weight:600;margin-bottom:4px">Features Queue</div>
+        <div style="display:flex;align-items:center;gap:5px;color:#3fb950;font-weight:600;margin-bottom:4px">Features Queue<div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-q-feat"></div></div></div>
         <div id="q-feat" style="color:var(--text-muted)">—</div>
       </div>
       <div>
-        <div style="color:#e3b341;font-weight:600;margin-bottom:4px">Volume</div>
+        <div style="display:flex;align-items:center;gap:5px;color:#e3b341;font-weight:600;margin-bottom:4px">Volume<div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-q-vol"></div></div></div>
         <div id="q-vol" style="color:var(--text-muted)">—</div>
       </div>
     </div>
@@ -362,22 +420,34 @@
 <div id="tab-model" class="tab-pane">
   <div class="kpi-row" id="model-kpis">
     <div class="kpi-card good">
-      <div class="kpi-label">F1 Score</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">F1 Score</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-f1"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-f1">—</div>
       <div class="kpi-sub">Overall Model Reliability</div>
     </div>
     <div class="kpi-card accent">
-      <div class="kpi-label">AUC-PR</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">AUC-PR</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-auc-pr"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-auc-pr">—</div>
       <div class="kpi-sub">Model Quality Score</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Precision</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Precision</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-prec"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-prec">—</div>
       <div class="kpi-sub">How often a "fraud" alert is actually fraud</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">Recall</div>
+      <div class="kpi-label-row">
+        <div class="kpi-label">Recall</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-recall"></div></div>
+      </div>
       <div class="kpi-value" id="kpi-recall">—</div>
       <div class="kpi-sub">% of actual fraud we successfully flagged</div>
     </div>
@@ -402,15 +472,15 @@
 
   <div class="chart-grid">
     <div class="chart-card">
-      <div class="chart-title">SHAP Feature Importance (mean |SHAP|)</div>
+      <div class="chart-title" style="display:flex;align-items:center;gap:6px">SHAP Feature Importance (mean |SHAP|)<div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-shap"></div></div></div>
       <div class="chart-container" style="height:280px"><canvas id="shap-chart"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">High-Risk Score Distribution (scores &gt; 0.8)</div>
+      <div class="chart-title" style="display:flex;align-items:center;gap:6px">High-Risk Score Distribution (scores &gt; 0.8)<div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-score-dist"></div></div></div>
       <div class="chart-container" style="height:280px"><canvas id="fraud-hist-chart"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">GNN Architecture</div>
+      <div class="chart-title" style="display:flex;align-items:center;gap:6px">GNN Architecture<div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-gnn-arch"></div></div></div>
       <div style="padding:8px;font-size:12px;color:var(--text-muted);line-height:1.6">
         <div><strong style="color:var(--text)">GraphSAGE</strong> — Tri-partite graph</div>
         <div style="margin:4px 0">User <-> Transaction <-> Merchant</div>
@@ -1333,6 +1403,13 @@ async function loadDemoConfig() {
       ln.alt    = ln_cfg.alt || '';
       ln.style.height  = (ln_cfg.height || '40') + 'px';
       ln.style.display = 'block';
+    }
+    // KPI tooltips — keyed by tooltip element id, text set entirely from config
+    if (DEMO_CONFIG.kpi_tooltips) {
+      Object.entries(DEMO_CONFIG.kpi_tooltips).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+      });
     }
   } catch(e) {
     console.warn('demo_config.json not available, using defaults');

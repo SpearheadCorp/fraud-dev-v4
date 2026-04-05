@@ -16,5 +16,28 @@ data:
         "dev_label": "dev",
         "dev_style": "font-size:9px;opacity:0.45;text-transform:lowercase;letter-spacing:0"
       },
-      "gpu_util_window_s": 30
+      "gpu_util_window_s": 30,
+      "kpi_tooltips": {
+        "tooltip-kpi-exposure":          "Estimated dollar value of transactions currently flagged as high risk.",
+        "tooltip-kpi-txns":              "Total transactions processed during the current run.",
+        "tooltip-kpi-flagged":           "Transactions flagged by the scoring pipeline as likely fraud.",
+        "tooltip-kpi-fraud-rate":        "Percent of processed transactions currently classified as fraud.",
+        "tooltip-kpi-total-amt":         "Total dollar amount scored during the current run.",
+        "tooltip-kpi-decision-latency":  "Average scoring time per transaction based on the latest scoring batch.",
+        "tooltip-kpi-gpu-scoring":       "GPU utilization for the scoring stage reading features and writing fraud scores.",
+        "tooltip-kpi-gpu-triton":        "GPU utilization for the Triton inference service hosting the fraud model.",
+        "tooltip-kpi-gpu-prep":          "GPU utilization for the data-prep stage that builds model-ready features.",
+        "tooltip-kpi-gpu-training":      "GPU utilization for the model-train stage running GraphSAGE and XGBoost updates.",
+        "tooltip-kpi-vol":               "Total number of transactions processed in this run.",
+        "tooltip-q-raw":                 "Files waiting, in progress, and completed in the raw transaction queue.",
+        "tooltip-q-feat":                "Files waiting, in progress, and completed in the feature queue.",
+        "tooltip-q-vol":                 "Cumulative processed transactions and current processing rate.",
+        "tooltip-kpi-f1":                "Balanced measure of precision and recall for the current fraud model.",
+        "tooltip-kpi-auc-pr":            "Precision-recall area under curve, useful for imbalanced fraud detection data.",
+        "tooltip-kpi-prec":              "Share of fraud alerts that are truly fraudulent.",
+        "tooltip-kpi-recall":            "Share of actual fraud that the model successfully catches.",
+        "tooltip-shap":                  "Top features ranked by average impact on model predictions.",
+        "tooltip-score-dist":            "Distribution of recent alerts with fraud scores above 0.8.",
+        "tooltip-gnn-arch":              "Summary of the GraphSAGE + XGBoost model structure used in the demo."
+      }
     }
