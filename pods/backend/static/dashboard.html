@@ -336,7 +336,7 @@
     </div>
     <div class="kpi-card accent">
       <div class="kpi-label-row">
-        <div class="kpi-label">Triton <span style="font-size:9px;color:var(--text-muted)">n29-1 .44</span></div>
+        <div class="kpi-label">Inference <span style="font-size:9px;color:var(--text-muted)">n29-1 .44</span></div>
         <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-gpu-triton"></div></div>
       </div>
       <div class="kpi-value" id="kpi-gpu-n29-1">0%</div>
@@ -375,7 +375,7 @@
         <div class="chart-title" style="margin:0">GPU Engine Active <span style="font-size:10px;color:var(--text-muted)">(1s DCGM profiling)</span></div>
         <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">Scoring</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#58a6ff">Triton</span></label>
+          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#58a6ff">Inference</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,2)"><span style="color:#f0883e">Prep</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#3fb950">Training</span></label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,4)"><span style="color:#e3b341">FB ms</span></label>
@@ -581,7 +581,7 @@ function makeUtilChart() {
       labels: [],
       datasets: [
         { label: 'Scoring', data: [], borderColor: '#bc8cff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'Triton',   data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+        { label: 'Inference',   data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'Prep',     data: [], borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'Training', data: [], borderColor: '#3fb950', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
         { label: 'FB ms',     data: [], borderColor: '#e3b341', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, borderDash: [4,2], yAxisID: 'yFb' },
@@ -1312,7 +1312,7 @@ async function resetPipeline() {
 const SERVICE_LABELS = {
   'data-prep':     'Data Prep',
   'model-train':   'Model Train',
-  'triton':        'Triton',
+  'triton':        'Inference',
   'scoring':       'Scoring',
 };
 
