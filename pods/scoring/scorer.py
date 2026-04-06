@@ -198,10 +198,10 @@ def _connect_triton(url: str, retries: int) -> grpcclient.InferenceServerClient:
                     ("grpc.max_receive_message_length", -1),
                 ],
             )
-            if client.is_server_ready():
-                log.info("[INFO] Triton ready at %s", url)
+            if client.is_server_ready() and client.is_model_ready(MODEL_NAME):
+                log.info("[INFO] Triton ready at %s (model %s loaded)", url, MODEL_NAME)
                 return client
-            log.info("[INFO] Triton not ready (server up, not ready), retry %d/%d in 5s...", attempt + 1, retries)
+            log.info("[INFO] Triton not ready (server up, model not loaded yet), retry %d/%d in 5s...", attempt + 1, retries)
         except Exception as exc:
             log.info("[INFO] Triton not ready (%s), retry %d/%d in 5s...", exc, attempt + 1, retries)
         time.sleep(5)
