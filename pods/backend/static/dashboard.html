@@ -1767,7 +1767,7 @@
 
         // Business KPIs
         const biz = data.business || {};
-        document.getElementById("kpi-exposure").textContent = fmtDollarCompact(
+        document.getElementById("kpi-exposure").textContent = fmtDollarAlwaysM(
           biz.fraud_exposure_usd || 0,
         );
         document.getElementById("kpi-txns").textContent = fmtTxCount(
