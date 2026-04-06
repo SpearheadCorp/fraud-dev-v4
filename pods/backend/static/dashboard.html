@@ -1778,7 +1778,7 @@
         );
         document.getElementById("kpi-fraud-rate").textContent =
           (biz.fraud_rate_pct || 0).toFixed(2) + "%";
-        document.getElementById("kpi-total-amt").textContent = fmtDollarCompact(
+        document.getElementById("kpi-total-amt").textContent = fmtDollarAlwaysM(
           biz.total_amount_processed_usd || 0,
         );
         const decisionLatMs = biz.decision_latency_ms || 0;
@@ -2217,6 +2217,12 @@
         if (n >= 1_000_000_000)
           return "$" + (n / 1_000_000_000).toFixed(2) + "B";
         if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+        return "$" + numeral(Math.round(n)).format("0,0");
+      }
+      // Total $ Processed only — always stays in M so live changes are visible; commas in large M values
+      function fmtDollarAlwaysM(n) {
+        if (!n || isNaN(n)) return "$0";
+        if (n >= 1_000_000) return "$" + numeral(n / 1_000_000).format("0,0.00") + "M";
         return "$" + numeral(Math.round(n)).format("0,0");
       }
 
