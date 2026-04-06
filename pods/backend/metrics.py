@@ -82,6 +82,7 @@ class PipelineState:
         self.total_fraud_flagged: int = 0
         self.total_amount_processed_usd: float = 0.0
         self._last_prep_chunk_id: int = -1
+        self._last_scoring_chunk_id: int = -1
         self._processed_score_files: set[str] = set()
 
     def reset(self) -> None:
@@ -94,6 +95,7 @@ class PipelineState:
         self.total_fraud_flagged = 0
         self.total_amount_processed_usd = 0.0
         self._last_prep_chunk_id = -1
+        self._last_scoring_chunk_id = -1
         self._processed_score_files.clear()
 
     @property
@@ -694,12 +696,12 @@ class MetricsCollector:
         # After reset (no rows processed yet), return zeros
         prep       = telemetry.get("prep",    self.state.last_telemetry.get("prep", {}))
         scoring    = telemetry.get("scoring", self.state.last_telemetry.get("scoring", {}))
-        # Accumulate rows processed across batches (each telemetry has a chunk_id)
-        chunk_id = int(prep.get("chunk_id", -1))
-        batch_rows = int(prep.get("rows", 0))
-        if chunk_id >= 0 and chunk_id != self.state._last_prep_chunk_id:
+        # Accumulate rows from scoring telemetry (each telemetry has a chunk_id)
+        chunk_id = int(scoring.get("chunk_id", -1))
+        batch_rows = int(scoring.get("rows", 0))
+        if chunk_id >= 0 and chunk_id != self.state._last_scoring_chunk_id:
             self.state.total_rows_processed += batch_rows
-            self.state._last_prep_chunk_id = chunk_id
+            self.state._last_scoring_chunk_id = chunk_id
         total_txns = self.state.total_rows_processed
         if total_txns == 0:
             return {
