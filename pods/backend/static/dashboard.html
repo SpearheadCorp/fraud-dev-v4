@@ -1059,6 +1059,7 @@ function fmtComma(n) {
 // Keeps sub-million changes visible during live scoring runs.
 function fmtTxCount(n) {
   if (!n || isNaN(n)) return '0';
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
   if (n >= 100_000_000) return (n / 1_000_000).toFixed(2) + 'M';
   return numeral(Math.round(n)).format('0,0');
 }
@@ -1066,6 +1067,7 @@ function fmtTxCount(n) {
 // Fraud Flagged: always a full comma-separated integer so every new flag is visible.
 function fmtFlagged(n) {
   if (!n || isNaN(n)) return '0';
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
   return numeral(Math.round(n)).format('0,0');
 }
 
@@ -1073,6 +1075,7 @@ function fmtFlagged(n) {
 // Two decimal places ensure sub-million changes remain visible at the M scale.
 function fmtDollarCompact(n) {
   if (!n || isNaN(n)) return '$0';
+  if (n >= 1_000_000_000) return '$' + (n / 1_000_000_000).toFixed(2) + 'B';
   if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(2) + 'M';
   return '$' + numeral(Math.round(n)).format('0,0');
 }
