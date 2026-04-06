@@ -754,11 +754,11 @@ function updateDashboard(data) {
 
   // Business KPIs
   const biz = data.business || {};
-  document.getElementById('kpi-exposure').textContent = fmtDollar(biz.fraud_exposure_usd || 0);
-  document.getElementById('kpi-txns').textContent = fmtNum(biz.total_transactions || 0);
-  document.getElementById('kpi-flagged').textContent = fmtNum(biz.fraud_flagged || 0);
+  document.getElementById('kpi-exposure').textContent = fmtDollarCompact(biz.fraud_exposure_usd || 0);
+  document.getElementById('kpi-txns').textContent = fmtTxCount(biz.total_transactions || 0);
+  document.getElementById('kpi-flagged').textContent = fmtFlagged(biz.fraud_flagged || 0);
   document.getElementById('kpi-fraud-rate').textContent = (biz.fraud_rate_pct || 0).toFixed(2) + '%';
-  document.getElementById('kpi-total-amt').textContent = fmtDollar(biz.total_amount_processed_usd || 0);
+  document.getElementById('kpi-total-amt').textContent = fmtDollarCompact(biz.total_amount_processed_usd || 0);
   const decisionLatMs = biz.decision_latency_ms || 0;
   const dlEl = document.getElementById('kpi-decision-latency');
   if (dlEl) dlEl.textContent = decisionLatMs > 0 ? decisionLatMs.toFixed(3) + ' ms' : '—';
@@ -790,8 +790,8 @@ function updateDashboard(data) {
 
   // Volume processed (infra tab)
   const totalTx = biz.total_transactions || 0;
-  document.getElementById('kpi-vol').textContent = fmtNum(totalTx);
-  document.getElementById('kpi-vol-sub').textContent = fmtNum(totalTx) + ' transactions';
+  document.getElementById('kpi-vol').textContent = fmtTxCount(totalTx);
+  document.getElementById('kpi-vol-sub').textContent = fmtTxCount(totalTx) + ' transactions';
 
   // Throughput (prep processing rate)
   const fb = data.flashblade || {};
@@ -853,7 +853,7 @@ function updateDashboard(data) {
         geoBody.innerHTML = '<tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:20px">No scored data yet</td></tr>';
       } else {
         geoBody.innerHTML = states.map((st, i) =>
-          `<tr><td>${st}</td><td>${fmtDollar(fraudByGeo[st])}</td></tr>`
+          `<tr><td>${st}</td><td>${fmtDollarCompact(fraudByGeo[st])}</td></tr>`
         ).join('');
       }
     }
@@ -870,7 +870,7 @@ function updateDashboard(data) {
   if (qEl('q-feat')) qEl('q-feat').textContent = fmtQueue(queue.features);
   if (qEl('q-vol')) {
     const rps = biz.prep_rows_per_sec || 0;
-    qEl('q-vol').textContent = `${fmtNum(totalTx)} TX processed \u2022 ${fmtNum(rps)} rows/sec`;
+    qEl('q-vol').textContent = `${fmtTxCount(totalTx)} TX processed \u2022 ${fmtComma(rps)} rows/sec`;
   }
 
   // Model metrics from telemetry
@@ -890,7 +890,7 @@ function updateDashboard(data) {
   // GNN model stats (Tab 3)
   const gnnEl = document.getElementById('gnn-model-stats');
   if (gnnEl && train.gnn_epochs) {
-    gnnEl.textContent = `Trained: ${train.gnn_epochs} epochs on ${fmtNum(train.n_train || 0)} rows`;
+    gnnEl.textContent = `Trained: ${train.gnn_epochs} epochs on ${fmtComma(train.n_train || 0)} rows`;
   }
 
   // Real alerts from scored data
@@ -1050,6 +1050,28 @@ function fmtDollar(n) {
 }
 function fmtComma(n) {
   return numeral(Math.round(n || 0)).format('0,0');
+}
+
+// Transactions / Volume Processed: comma integer below 100M, X.XXM at or above 100M.
+// Keeps sub-million changes visible during live scoring runs.
+function fmtTxCount(n) {
+  if (!n || isNaN(n)) return '0';
+  if (n >= 100_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+  return numeral(Math.round(n)).format('0,0');
+}
+
+// Fraud Flagged: always a full comma-separated integer so every new flag is visible.
+function fmtFlagged(n) {
+  if (!n || isNaN(n)) return '0';
+  return numeral(Math.round(n)).format('0,0');
+}
+
+// Dollar KPIs (Fraud Exposure, Total $ Processed): $X,XXX below $1M, $X.XXM above.
+// Two decimal places ensure sub-million changes remain visible at the M scale.
+function fmtDollarCompact(n) {
+  if (!n || isNaN(n)) return '$0';
+  if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(2) + 'M';
+  return '$' + numeral(Math.round(n)).format('0,0');
 }
 
 // ---------------------------------------------------------------------------
