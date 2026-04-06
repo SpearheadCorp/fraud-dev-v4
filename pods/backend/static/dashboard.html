@@ -1219,35 +1219,101 @@ async function _ctlRunSteps(steps, doneTitle, doneSub, dismissLabel, onDismiss) 
   _ctlDone(doneTitle, doneSub, dismissLabel, onDismiss);
 }
 
-// Clear all dashboard displays (used by reset)
+// Clear all dashboard displays (used by reset) — restores to initial page-load state
 function _clearDashboard() {
-  document.getElementById('alerts-body').innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">Pipeline not running</td></tr>';
-  ['q-raw','q-feat','q-vol'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.textContent = '—';
-  });
+  // --- Business KPI values ---
   document.getElementById('kpi-exposure').textContent = '$0';
   document.getElementById('kpi-txns').textContent = '0';
   document.getElementById('kpi-flagged').textContent = '0';
   document.getElementById('kpi-fraud-rate').textContent = '0%';
+  document.getElementById('kpi-total-amt').textContent = '$0';
   const dlResetEl = document.getElementById('kpi-decision-latency');
   if (dlResetEl) dlResetEl.textContent = '—';
+
+  // Remove frozen state (reset zeroes values; stop preserves them)
+  const BIZ_KPI_IDS = ['kpi-exposure','kpi-txns','kpi-flagged','kpi-fraud-rate','kpi-total-amt','kpi-decision-latency','kpi-vol'];
+  BIZ_KPI_IDS.forEach(id => {
+    const card = document.getElementById(id)?.closest('.kpi-card');
+    if (card) card.classList.remove('kpi-frozen');
+  });
+
+  // --- Infra KPIs ---
   ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
-    document.getElementById(id).textContent = '0%';
+    document.getElementById(id).textContent = '0.0%';
   });
   ['kpi-gpu-n29-0-mem','kpi-gpu-n29-1-mem','kpi-gpu-n25-0-mem','kpi-gpu-n25-1-mem'].forEach(id => {
     document.getElementById(id).textContent = '0% mem';
   });
-  ['kpi-f1','kpi-auc-pr','kpi-prec','kpi-recall'].forEach(id => { document.getElementById(id).textContent = '—'; });
+  document.getElementById('kpi-vol').textContent = '0';
+  document.getElementById('kpi-vol-sub').textContent = 'transactions';
+
+  // --- Queue displays ---
+  ['q-raw','q-feat','q-vol'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.textContent = '—';
+  });
+
+  // --- Alerts table ---
+  const alertsBody = document.getElementById('alerts-body');
+  if (alertsBody) {
+    alertsBody.textContent = '';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 5;
+    td.style.cssText = 'color:var(--text-muted);text-align:center;padding:20px';
+    td.textContent = 'Pipeline not running';
+    tr.appendChild(td);
+    alertsBody.appendChild(tr);
+  }
+
+  // --- Geography table ---
+  const geoBody = document.getElementById('geo-body');
+  if (geoBody) {
+    geoBody.textContent = '';
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 2;
+    td.style.cssText = 'color:var(--text-muted);text-align:center;padding:20px';
+    td.textContent = 'No scored data yet';
+    tr.appendChild(td);
+    geoBody.appendChild(tr);
+  }
+  _lastGeoJson = '';
+
+  // --- Category chart ---
+  if (catChart) {
+    catChart.data.datasets[0].data = new Array(catChart.data.labels.length).fill(0);
+    catChart.update('none');
+  }
+
+  // --- Chart histories ---
   history.gpu_scoring.length = 0; history.gpu_triton.length = 0;
   history.gpu_prep.length = 0;    history.gpu_training.length = 0;
   history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
   updateLineChart(txChart, [], []);
-  if (utilChart) { utilChart.data.labels = []; utilChart.data.datasets.forEach(ds => ds.data = []); utilChart.update('none'); }
+  if (utilChart)    { utilChart.data.labels = [];    utilChart.data.datasets.forEach(ds => ds.data = []);    utilChart.update('none'); }
   if (tputLatChart) { tputLatChart.data.labels = []; tputLatChart.data.datasets.forEach(ds => ds.data = []); tputLatChart.update('none'); }
+
+  // --- Model / SHAP tab ---
+  ['kpi-f1','kpi-auc-pr','kpi-prec','kpi-recall'].forEach(id => { document.getElementById(id).textContent = '—'; });
+  const gnnEl = document.getElementById('gnn-model-stats');
+  if (gnnEl) gnnEl.textContent = '—';
   if (shapChart) { shapChart.destroy(); shapChart = null; }
   if (fraudHistChart) { fraudHistChart.destroy(); fraudHistChart = null; }
   shapLoaded = false;
-  document.getElementById('shap-status').textContent = 'SHAP data not ready yet — run the pipeline first.';
+  modelTabOpened = false;
+  document.getElementById('shap-status').textContent = 'SHAP data loads automatically after model-build completes.';
+
+  // --- Elapsed timer ---
+  document.getElementById('elapsed').textContent = '00:00:00';
+
+  // --- Pod modal ---
+  hidePodModal();
+
+  // --- Switch back to Business tab ---
+  const bizTabBtn = document.querySelector('.tab-btn');
+  if (bizTabBtn) showTab('business', bizTabBtn);
+
+  // --- Start button ---
   document.getElementById('start-btn').textContent = '▶ Start';
 }
 
