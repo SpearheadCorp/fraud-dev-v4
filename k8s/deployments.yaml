@@ -314,7 +314,7 @@ spec:
             - name: WINDOW_CHUNKS
               value: "2"
             - name: TRITON_RETRIES
-              value: "30"
+              value: "120"
             - name: BATCH_FILES
               value: "2"
           volumeMounts:
