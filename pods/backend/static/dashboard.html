@@ -1431,6 +1431,20 @@
       let tputLatChart = null;
       let txChart = null;
       let wsReconnectDelay = 2000;
+      let _elapsedSec = 0;
+      let _elapsedRunning = false;
+      setInterval(() => {
+        if (_elapsedRunning) {
+          _elapsedSec++;
+          const h = String(Math.floor(_elapsedSec / 3600)).padStart(2, "0");
+          const m = String(Math.floor((_elapsedSec % 3600) / 60)).padStart(
+            2,
+            "0",
+          );
+          const s = String(_elapsedSec % 60).padStart(2, "0");
+          document.getElementById("elapsed").textContent = `${h}:${m}:${s}`;
+        }
+      }, 1000);
 
       function makeUtilChart() {
         const ctx = document.getElementById("util-chart");
@@ -1714,7 +1728,7 @@
             "kpi-gpu-n25-0-mem",
             "kpi-gpu-n25-1-mem",
           ].forEach((id) => {
-            _setMemTile(id, "0.0% mem");
+            _setMemTile(id, 0, 30);
           });
           history.gpu_n29_0.length = 0;
           history.gpu_n29_1.length = 0;
@@ -1782,12 +1796,10 @@
           }
         }
 
-        // Elapsed — backend freezes value on stop, so just display as-is
+        // Elapsed — sync from server to stay accurate, tick locally every second
         const e = data.elapsed_sec || 0;
-        const h = String(Math.floor(e / 3600)).padStart(2, "0");
-        const m = String(Math.floor((e % 3600) / 60)).padStart(2, "0");
-        const s = String(e % 60).padStart(2, "0");
-        document.getElementById("elapsed").textContent = `${h}:${m}:${s}`;
+        if (Math.abs(e - _elapsedSec) > 1) _elapsedSec = e; // resync if drift > 1s
+        _elapsedRunning = isRunning;
 
         // Track first scoring batch for Phase 2 modal completion
         if (
@@ -1832,40 +1844,16 @@
         const gTraining = gpu.gpu_training_util_pct || 0;
         document.getElementById("kpi-gpu-n29-0").textContent =
           gScoring.toFixed(1) + "%";
-        _setMemTile(
-          "kpi-gpu-n29-0-mem",
-          (gpu.gpu_scoring_mem_pct || 0).toFixed(1) +
-            "% mem · max " +
-            gpuWin +
-            "s",
-        );
+        _setMemTile("kpi-gpu-n29-0-mem", gpu.gpu_scoring_mem_pct || 0, gpuWin);
         document.getElementById("kpi-gpu-n29-1").textContent =
           gTriton.toFixed(1) + "%";
-        _setMemTile(
-          "kpi-gpu-n29-1-mem",
-          (gpu.gpu_triton_mem_pct || 0).toFixed(1) +
-            "% mem · max " +
-            gpuWin +
-            "s",
-        );
+        _setMemTile("kpi-gpu-n29-1-mem", gpu.gpu_triton_mem_pct || 0, gpuWin);
         document.getElementById("kpi-gpu-n25-0").textContent =
           gPrep.toFixed(1) + "%";
-        _setMemTile(
-          "kpi-gpu-n25-0-mem",
-          (gpu.gpu_prep_mem_pct || 0).toFixed(1) +
-            "% mem · max " +
-            gpuWin +
-            "s",
-        );
+        _setMemTile("kpi-gpu-n25-0-mem", gpu.gpu_prep_mem_pct || 0, gpuWin);
         document.getElementById("kpi-gpu-n25-1").textContent =
           gTraining.toFixed(1) + "%";
-        _setMemTile(
-          "kpi-gpu-n25-1-mem",
-          (gpu.gpu_training_mem_pct || 0).toFixed(1) +
-            "% mem · max " +
-            gpuWin +
-            "s",
-        );
+        _setMemTile("kpi-gpu-n25-1-mem", gpu.gpu_training_mem_pct || 0, gpuWin);
         // Dim tiles when all GPU values are zero (metrics unavailable vs. GPU idle)
         const allGpuZero = [gScoring, gTriton, gPrep, gTraining].every(
           (v) => v === 0,
@@ -2242,13 +2230,14 @@
       function fmtComma(n) {
         return numeral(Math.round(n || 0)).format("0,0");
       }
-      // Updates GPU mem tile: number+% in accent color/larger font, suffix in normal kpi-sub style
-      function _setMemTile(id, fullText) {
-        const pctEnd = fullText.indexOf("%") + 1;
+      // Updates GPU mem tile: displays maximum utilization over the measurement window
+      function _setMemTile(id, memPct, windowSecs) {
         const valEl = document.getElementById(id + "-val");
         const lblEl = document.getElementById(id + "-label");
-        if (valEl) valEl.textContent = fullText.slice(0, pctEnd);
-        if (lblEl) lblEl.textContent = fullText.slice(pctEnd);
+        if (valEl) valEl.textContent = "";
+        if (lblEl)
+          lblEl.textContent =
+            "Maximum utilization to last " + windowSecs + " secs";
       }
 
       // Transactions / Volume Processed: comma integer below 100M, X.XXM at or above 100M.
@@ -2527,7 +2516,7 @@
           "kpi-gpu-n25-0-mem",
           "kpi-gpu-n25-1-mem",
         ].forEach((id) => {
-          _setMemTile(id, "0% mem");
+          _setMemTile(id, "", 30);
         });
         document.getElementById("kpi-vol").textContent = "0";
         document.getElementById("kpi-vol-sub").textContent = "transactions";
@@ -2615,6 +2604,8 @@
           "SHAP data loads automatically after model-build completes.";
 
         // --- Elapsed timer ---
+        _elapsedSec = 0;
+        _elapsedRunning = false;
         document.getElementById("elapsed").textContent = "00:00:00";
 
         // --- Pod modal ---
