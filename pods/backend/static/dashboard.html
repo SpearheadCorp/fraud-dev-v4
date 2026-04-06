@@ -239,6 +239,14 @@
 <!-- ===== BUSINESS TAB ===== -->
 <div id="tab-business" class="tab-pane active">
   <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label-row">
+        <div class="kpi-label">Total $ Processed</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-total-amt"></div></div>
+      </div>
+      <div class="kpi-value" id="kpi-total-amt">$0</div>
+      <div class="kpi-sub">transaction volume</div>
+    </div>
     <div class="kpi-card highlight">
       <div class="kpi-label-row">
         <div class="kpi-label">Fraud Exposure</div>
@@ -246,14 +254,6 @@
       </div>
       <div class="kpi-value" id="kpi-exposure">$0</div>
       <div class="kpi-sub">estimated at risk</div>
-    </div>
-    <div class="kpi-card accent">
-      <div class="kpi-label-row">
-        <div class="kpi-label">Transactions</div>
-        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-txns"></div></div>
-      </div>
-      <div class="kpi-value" id="kpi-txns">0</div>
-      <div class="kpi-sub">processed this run</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label-row">
@@ -271,13 +271,13 @@
       <div class="kpi-value" id="kpi-fraud-rate">0%</div>
       <div class="kpi-sub">of transactions</div>
     </div>
-    <div class="kpi-card">
+    <div class="kpi-card accent">
       <div class="kpi-label-row">
-        <div class="kpi-label">Total $ Processed</div>
-        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-total-amt"></div></div>
+        <div class="kpi-label">Transactions</div>
+        <div class="kpi-info"><div class="kpi-info-icon">i</div><div class="kpi-tooltip" id="tooltip-kpi-txns"></div></div>
       </div>
-      <div class="kpi-value" id="kpi-total-amt">$0</div>
-      <div class="kpi-sub">transaction volume</div>
+      <div class="kpi-value" id="kpi-txns">0</div>
+      <div class="kpi-sub">processed this run</div>
     </div>
     <div class="kpi-card accent">
       <div class="kpi-label-row">
