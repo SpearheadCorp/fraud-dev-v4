@@ -714,10 +714,13 @@ function updateDashboard(data) {
     if (card) card.classList.toggle('kpi-frozen', !isRunning);
   });
 
-  // Env badge
+  // Env badge — suppressed when show_in_dev/show_in_prod is false in demo-config
   const envInline = document.getElementById('env-inline');
   if (envInline && data.env) {
-    envInline.textContent = '(' + data.env + ')';
+    const envCfg = DEMO_CONFIG.env || {};
+    const isDevEnv = data.env === 'DEV';
+    const show = isDevEnv ? envCfg.show_in_dev !== false : envCfg.show_in_prod !== false;
+    envInline.textContent = show ? '(' + data.env + ')' : '';
   }
 
   // Liveness badge — shown always; green=all pods Ready, red=degraded
