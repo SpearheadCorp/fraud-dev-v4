@@ -729,10 +729,20 @@ class MetricsCollector:
             # Fallback to cumulative average if no recent telemetry
             display_rate = (fraud_flagged / total_txns) if total_txns > 0 else 0.0
 
-        decision_latency_ms = (
+        prep_gpu_time_s = float(prep.get("gpu_time_s", 0.0))
+        prep_rows = int(prep.get("rows", 0))
+
+        prep_latency_ms = (
+            (prep_gpu_time_s * 1000) / prep_rows
+            if prep_rows > 0 and prep_gpu_time_s > 0 else 0.0
+        )
+
+        scoring_latency_per_row_ms = (
             scoring_latency_ms / scoring_rows
             if scoring_rows > 0 and scoring_latency_ms > 0 else 0.0
         )
+
+        decision_latency_ms = prep_latency_ms + scoring_latency_per_row_ms
 
         return {
             "total_transactions": total_txns,

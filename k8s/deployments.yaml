@@ -70,10 +70,20 @@ spec:
               ephemeral-storage: "1Gi"
           readinessProbe:
             httpGet:
-              path: /api/status
+              path: /healthz
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
       volumes:
         - name: raw-data
           persistentVolumeClaim:
@@ -312,7 +322,7 @@ spec:
             - name: WINDOW_CHUNKS
               value: "2"
             - name: TRITON_RETRIES
-              value: "30"
+              value: "120"
             - name: BATCH_FILES
               value: "2"
           volumeMounts:

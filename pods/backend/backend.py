@@ -57,17 +57,25 @@ async def serve_dashboard():
     return HTMLResponse(html_path.read_text())
 
 
+@app.get("/healthz")
+async def healthz():
+    return {"status": "ok"}
+
+
 @app.get("/api/status")
 async def get_status():
-    service_states = pl.get_service_states()
-    replicas       = pl.get_replica_counts()
-    score_files    = len(list(SCORES_PATH.glob("*.parquet"))) if SCORES_PATH.exists() else 0
+    loop = asyncio.get_running_loop()
+    service_states, replicas = await asyncio.gather(
+        loop.run_in_executor(None, pl.get_service_states),
+        loop.run_in_executor(None, pl.get_replica_counts),
+    )
+    score_files = len(list(SCORES_PATH.glob("*.parquet"))) if SCORES_PATH.exists() else 0
     return {
         "is_running":        state.is_running,
         "elapsed_sec":       state.elapsed_sec,
         "services":          service_states,
         "replicas":          replicas,
-        "health":            pl.get_health_status(),
+        "health":            pl.get_health_status(service_states),
         "env":               ENV_LABEL,
         "score_files_count": score_files,
     }
@@ -80,15 +88,13 @@ async def start_pipeline():
     state.is_running = True
     state.start_time = time.time()
     state.stop_time  = None
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, pl.start_pipeline)
+    await asyncio.get_running_loop().run_in_executor(None, pl.start_pipeline)
     return {"status": "started", "message": "Deployments scaled up"}
 
 
 @app.post("/api/control/stop")
 async def stop_pipeline():
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, pl.stop_pipeline)
+    result = await asyncio.get_running_loop().run_in_executor(None, pl.stop_pipeline)
     state.is_running = False
     state.stop_time  = time.time()
     return result
@@ -96,8 +102,7 @@ async def stop_pipeline():
 
 @app.post("/api/control/reset")
 async def reset_pipeline():
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
+    result = await asyncio.get_running_loop().run_in_executor(
         None, lambda: pl.reset_pipeline(
             RAW_PATH, FEATURES_PATH, SCORES_PATH,
         )
@@ -173,16 +178,18 @@ async def prometheus_metrics():
 async def dashboard_ws(websocket: WebSocket):
     await websocket.accept()
     log.info("WebSocket client connected")
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     tick = 0
     _last_full: dict = {}
     try:
         while True:
+            deadline = loop.time() + 0.2
             try:
                 if tick % 10 == 0:
                     # Full collection every 10th tick (2s): pod logs, NFS globs, fraud metrics
+                    service_states = await loop.run_in_executor(None, pl.get_service_states)
                     _last_full = await loop.run_in_executor(None, collector.collect)
-                    _last_full["health"] = await loop.run_in_executor(None, pl.get_health_status)
+                    _last_full["health"] = pl.get_health_status(service_states)
                     _last_full["env"]    = ENV_LABEL
                     payload = _last_full
                 else:
@@ -192,11 +199,15 @@ async def dashboard_ws(websocket: WebSocket):
             except Exception as exc:
                 log.warning("Metrics collect error: %s", exc)
                 tick += 1
-                await asyncio.sleep(0.2)
+                remaining = deadline - loop.time()
+                if remaining > 0:
+                    await asyncio.sleep(remaining)
                 continue
             await websocket.send_json(payload)
             tick += 1
-            await asyncio.sleep(0.2)
+            remaining = deadline - loop.time()
+            if remaining > 0:
+                await asyncio.sleep(remaining)
     except WebSocketDisconnect:
         log.info("WebSocket client disconnected")
     except Exception:

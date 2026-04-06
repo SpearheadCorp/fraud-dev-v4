@@ -30,13 +30,18 @@ PIPELINE_REPLICAS = {
 }
 
 
+_k8s_clients = None
+
 def _k8s():
-    """Return (BatchV1Api, AppsV1Api, CoreV1Api) — load in-cluster or kubeconfig."""
-    try:
-        config.load_incluster_config()
-    except config.ConfigException:
-        config.load_kube_config()
-    return client.BatchV1Api(), client.AppsV1Api(), client.CoreV1Api()
+    """Return (BatchV1Api, AppsV1Api, CoreV1Api) — cached singleton, loaded once."""
+    global _k8s_clients
+    if _k8s_clients is None:
+        try:
+            config.load_incluster_config()
+        except config.ConfigException:
+            config.load_kube_config()
+        _k8s_clients = client.BatchV1Api(), client.AppsV1Api(), client.CoreV1Api()
+    return _k8s_clients
 
 
 def _scale(apps_v1: client.AppsV1Api, name: str, replicas: int) -> None:
@@ -163,9 +168,11 @@ def get_service_states() -> dict:
     return states
 
 
-def get_health_status() -> str:
-    """Return overall pipeline health: 'Live', 'Starting', or 'Error'."""
-    states = get_service_states()
+def get_health_status(states: dict = None) -> str:
+    """Return overall pipeline health: 'Live', 'Starting', or 'Error'.
+    Pass pre-fetched states to avoid a redundant K8s round-trip."""
+    if states is None:
+        states = get_service_states()
     pipeline_states = [states.get(dep, "Stopped") for dep in PIPELINE_REPLICAS]
     if all(s == "Ready" for s in pipeline_states):
         return "Live"
