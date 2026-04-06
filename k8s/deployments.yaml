@@ -333,6 +333,7 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
+            timeoutSeconds: 10
       volumes:
         - name: features-data
           persistentVolumeClaim:
@@ -404,6 +405,7 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
+            timeoutSeconds: 10
       volumes:
         - name: features-data
           persistentVolumeClaim:

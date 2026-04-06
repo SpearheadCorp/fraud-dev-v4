@@ -201,9 +201,10 @@ def _connect_triton(url: str, retries: int) -> grpcclient.InferenceServerClient:
             if client.is_server_ready():
                 log.info("[INFO] Triton ready at %s", url)
                 return client
+            log.info("[INFO] Triton not ready (server up, not ready), retry %d/%d in 5s...", attempt + 1, retries)
         except Exception as exc:
             log.info("[INFO] Triton not ready (%s), retry %d/%d in 5s...", exc, attempt + 1, retries)
-            time.sleep(5)
+        time.sleep(5)
     log.error("[ERROR] Triton not reachable after %d retries at %s", retries, url)
     sys.exit(1)
 
