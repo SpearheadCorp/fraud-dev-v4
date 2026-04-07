@@ -248,7 +248,7 @@ spec:
         kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: triton
-          image: 10.23.181.247:5000/fraud-det/triton:latest
+          image: 10.23.181.247:5000/fraud-det-triton/triton:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000   # HTTP
