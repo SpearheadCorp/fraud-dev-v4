@@ -32,7 +32,7 @@ spec:
       serviceAccountName: backend-sa
       containers:
         - name: backend
-          image: 10.23.181.247:5000/fraud-det-v4/backend:latest
+          image: 10.23.181.247:5000/fraud-det/backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -125,7 +125,7 @@ spec:
         kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: data-gather
-          image: 10.23.181.247:5000/fraud-det-v4/data-gather:latest
+          image: 10.23.181.247:5000/fraud-det/data-gather:latest
           imagePullPolicy: Always
           env:
             - name: OUTPUT_PATH
@@ -183,7 +183,7 @@ spec:
         kubernetes.io/hostname: slc6-lg-n3-b30-25
       containers:
         - name: data-prep
-          image: 10.23.181.247:5000/fraud-det-v4/data-prep:latest
+          image: 10.23.181.247:5000/fraud-det/data-prep:latest
           imagePullPolicy: Always
           env:
             - name: INPUT_PATH
@@ -248,7 +248,7 @@ spec:
         kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: triton
-          image: 10.23.181.247:5000/fraud-det-v4/triton:latest
+          image: 10.23.181.247:5000/fraud-det/triton:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000   # HTTP
@@ -308,7 +308,7 @@ spec:
         kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: scoring
-          image: 10.23.181.247:5000/fraud-det-v4/scoring:latest
+          image: 10.23.181.247:5000/fraud-det/scoring:latest
           imagePullPolicy: Always
           env:
             - name: FEATURES_PATH
@@ -376,7 +376,7 @@ spec:
         kubernetes.io/hostname: slc6-lg-n3-b30-25
       containers:
         - name: model-train
-          image: 10.23.181.247:5000/fraud-det-v4/model-train:latest
+          image: 10.23.181.247:5000/fraud-det/model-train:latest
           imagePullPolicy: Always
           env:
             - name: INPUT_PATH
