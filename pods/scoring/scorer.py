@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import tritonclient.http as httpclient
+import tritonclient.grpc as grpcclient
 import cudf
 import cupy as cp
 from concurrent.futures import ThreadPoolExecutor
@@ -82,7 +82,7 @@ FEATURE_COLS = [
 N_TABULAR = len(FEATURE_COLS)  # 35
 
 GRAPH_COLS = ["cc_num", "merchant"]
-SCORE_COLS = ["trans_num", "cc_num", "merchant", "amt", "category", "is_fraud"]
+SCORE_COLS = ["trans_num", "cc_num", "merchant", "amt", "category", "is_fraud", "state"]
 
 # Pod-unique prefix so multiple replicas don't overwrite each other's score files.
 _POD_PREFIX = os.environ.get("HOSTNAME", str(os.getpid()))
@@ -187,16 +187,24 @@ class WindowedGraph:
 # Triton inference
 # ---------------------------------------------------------------------------
 
-def _connect_triton(url: str, retries: int) -> httpclient.InferenceServerClient:
+def _connect_triton(url: str, retries: int) -> grpcclient.InferenceServerClient:
     for attempt in range(retries):
         try:
-            client = httpclient.InferenceServerClient(url=url, verbose=False)
-            if client.is_server_ready():
-                log.info("[INFO] Triton ready at %s", url)
+            client = grpcclient.InferenceServerClient(
+                url=url,
+                verbose=False,
+                channel_args=[
+                    ("grpc.max_send_message_length", -1),
+                    ("grpc.max_receive_message_length", -1),
+                ],
+            )
+            if client.is_server_ready() and client.is_model_ready(MODEL_NAME):
+                log.info("[INFO] Triton ready at %s (model %s loaded)", url, MODEL_NAME)
                 return client
+            log.info("[INFO] Triton not ready (server up, model not loaded yet), retry %d/%d in 5s...", attempt + 1, retries)
         except Exception as exc:
             log.info("[INFO] Triton not ready (%s), retry %d/%d in 5s...", exc, attempt + 1, retries)
-            time.sleep(5)
+        time.sleep(5)
     log.error("[ERROR] Triton not reachable after %d retries at %s", retries, url)
     sys.exit(1)
 
@@ -204,24 +212,24 @@ def _connect_triton(url: str, retries: int) -> httpclient.InferenceServerClient:
 def score_chunk(
     df: pd.DataFrame,
     graph: WindowedGraph,
-    client: httpclient.InferenceServerClient,
+    client: grpcclient.InferenceServerClient,
     model_name: str,
 ) -> np.ndarray:
     """Run GNN+XGBoost inference for new_df rows. Returns fraud probabilities [n_rows]."""
     node_features, edge_index, feature_mask, n_new_tx = graph.build_inference_graph(df)
 
     inputs = [
-        httpclient.InferInput("NODE_FEATURES", list(node_features.shape), "FP32"),
-        httpclient.InferInput("EDGE_INDEX",    list(edge_index.shape),    "INT64"),
-        httpclient.InferInput("FEATURE_MASK",  list(feature_mask.shape),  "INT32"),
-        httpclient.InferInput("COMPUTE_SHAP",  [1],                       "BOOL"),
+        grpcclient.InferInput("NODE_FEATURES", list(node_features.shape), "FP32"),
+        grpcclient.InferInput("EDGE_INDEX",    list(edge_index.shape),    "INT64"),
+        grpcclient.InferInput("FEATURE_MASK",  list(feature_mask.shape),  "INT32"),
+        grpcclient.InferInput("COMPUTE_SHAP",  [1],                       "BOOL"),
     ]
     inputs[0].set_data_from_numpy(node_features)
     inputs[1].set_data_from_numpy(edge_index)
     inputs[2].set_data_from_numpy(feature_mask)
     inputs[3].set_data_from_numpy(np.array([False]))
 
-    outputs = [httpclient.InferRequestedOutput("PREDICTION")]
+    outputs = [grpcclient.InferRequestedOutput("PREDICTION")]
     response = client.infer(model_name, inputs=inputs, outputs=outputs)
     all_probs = response.as_numpy("PREDICTION").flatten()
 
@@ -235,11 +243,12 @@ def score_chunk(
 # ---------------------------------------------------------------------------
 
 def emit_telemetry(chunk_id: int, rows: int, latency_ms: float, fraud_rate: float,
-                   decision_latency_ms: float = 0.0) -> None:
+                   decision_latency_ms: float = 0.0, chunk_ts: float = 0.0) -> None:
     sys.stdout.write(
         f"[TELEMETRY] stage=scoring chunk_id={chunk_id} rows={rows} "
         f"latency_ms={latency_ms:.1f} fraud_rate={fraud_rate:.4f} "
-        f"decision_latency_ms={decision_latency_ms:.0f}\n"
+        f"decision_latency_ms={decision_latency_ms:.0f} "
+        f"chunk_ts={chunk_ts:.3f}\n"
     )
     sys.stdout.flush()
 
@@ -250,8 +259,9 @@ def emit_telemetry(chunk_id: int, rows: int, latency_ms: float, fraud_rate: floa
 
 def _claim_files(path: Path, batch: int) -> list:
     """Atomically claim up to `batch` feature files."""
-    files = sorted(f for f in path.glob("*.parquet")
-                   if not f.name.endswith((".processing", ".done")))
+    files = sorted((f for f in path.glob("*.parquet")
+                   if not f.name.endswith((".processing", ".done"))),
+                   key=lambda p: p.stat().st_mtime)
     claimed = []
     for f in files:
         if len(claimed) >= batch:
@@ -321,11 +331,9 @@ def main() -> None:
         t_read = time.perf_counter() - t_read
         n_rows = len(mega_gdf)
 
-        # --- GPU feature extraction: fillna + column selection on GPU ---
+        # --- Transfer to CPU for graph building + Triton ---
         t_feat = time.perf_counter()
         avail = [c for c in FEATURE_COLS if c in mega_gdf.columns]
-        feat_gdf = mega_gdf[avail].fillna(0.0)
-        # Transfer to CPU numpy for Triton (cupy -> numpy)
         df = mega_gdf.to_arrow().to_pandas()
         t_feat = time.perf_counter() - t_feat
 
@@ -376,7 +384,8 @@ def main() -> None:
         fraud_rate = float((probs > 0.5).mean())
         emit_telemetry(chunk_id=chunk_id, rows=n_rows,
                        latency_ms=total_ms, fraud_rate=fraud_rate,
-                       decision_latency_ms=decision_latency_ms)
+                       decision_latency_ms=decision_latency_ms,
+                       chunk_ts=chunk_ts if chunk_ts else 0.0)
         log.info("batch %06d: %d rows, %.0fms (read=%.1fs feat=%.1fs score=%.1fs write=%.1fs) fraud=%.4f",
                  chunk_id, n_rows, total_ms, t_read, t_feat, t_score, t_write, fraud_rate)
         chunk_id += 1

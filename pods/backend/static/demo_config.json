@@ -1,0 +1,13 @@
+{
+  "title": "Everpure - Fraud Detection Demo using Nvidia NIMs (incl. GNN + XGBoost)",
+  "logos": {
+    "customer": { "src": "/static/assets/everpure.svg", "alt": "Everpure", "height": "32" },
+    "nvidia":   { "src": "/static/assets/nvidia.svg",   "alt": "NVIDIA",   "height": "22" }
+  },
+  "env": {
+    "show_in_prod": false,
+    "dev_label": "dev",
+    "dev_style": "font-size:9px;opacity:0.45;text-transform:lowercase;letter-spacing:0"
+  },
+  "gpu_util_window_s": 30
+}

@@ -5,6 +5,7 @@ FlashBlade storage latency (REST API), queue depth, fraud scores.
 import os
 import json
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -27,6 +28,16 @@ SCORES_PATH       = Path(os.environ.get("SCORES_PATH",        "/data/scores"))
 NAMESPACE         = os.environ.get("K8S_NAMESPACE",           "fraud-det-v31")
 FLASHBLADE_FS_NAME = os.environ.get("FLASHBLADE_FS_NAME",    "financial-fraud-detection-demo")
 FLASHBLADE_MGMT_IP = os.environ.get("FLASHBLADE_MGMT_IP",    "10.23.181.60")
+
+
+def _load_gpu_window() -> int:
+    """Read gpu_util_window_s from demo_config.json (ConfigMap-mounted at runtime).
+    Falls back to 30s if the file is missing or the key is absent."""
+    cfg_path = Path(__file__).parent / "static" / "demo_config.json"
+    try:
+        return int(json.loads(cfg_path.read_text()).get("gpu_util_window_s", 30))
+    except Exception:
+        return 30
 FLASHBLADE_API_TOKEN = os.environ.get("FLASHBLADE_API_TOKEN", "")  # Set via K8s Secret or env var
 NFS_NODE_INSTANCE  = os.environ.get("NFS_NODE_INSTANCE",      "10.23.181.44:9100")
 
@@ -64,30 +75,64 @@ class PipelineState:
     def __init__(self) -> None:
         self.is_running: bool = False
         self.start_time: Optional[float] = None
+        self.stop_time:  Optional[float] = None
         self.last_telemetry: dict = {}
         self.total_rows_processed: int = 0
+        self.total_fraud_exposure_usd: float = 0.0
+        self.total_fraud_flagged: int = 0
+        self.total_amount_processed_usd: float = 0.0
         self._last_prep_chunk_id: int = -1
+        self._last_scoring_chunk_id: int = -1
+        self._processed_score_files: set[str] = set()
 
     def reset(self) -> None:
         self.is_running = False
         self.start_time = None
+        self.stop_time  = None
         self.last_telemetry = {}
         self.total_rows_processed = 0
+        self.total_fraud_exposure_usd = 0.0
+        self.total_fraud_flagged = 0
+        self.total_amount_processed_usd = 0.0
         self._last_prep_chunk_id = -1
+        self._last_scoring_chunk_id = -1
+        self._processed_score_files.clear()
 
     @property
     def elapsed_sec(self) -> int:
         if self.start_time is None:
             return 0
-        return int(time.time() - self.start_time)
+        end = self.stop_time if self.stop_time else time.time()
+        return int(end - self.start_time)
 
 
 _TELEMETRY_CACHE = MODEL_REPO / "last_telemetry.json"
+_STATE_CACHE = MODEL_REPO / "pipeline_state.json"
+
+
+_GPU_ROLE_MAP_TTL = 30.0  # seconds between k8s API refreshes for GPU role map
+
+# Maps app label → stable role name used in metric keys and dashboard
+_APP_TO_ROLE = {
+    "data-prep":   "prep",
+    "model-train": "training",
+    "scoring":     "scoring",
+    "triton":      "triton",
+}
 
 
 class MetricsCollector:
     def __init__(self, state: PipelineState) -> None:
         self.state = state
+        self._fraud_cache: dict = {}
+        self._fraud_cache_at: float = 0.0
+        self._fraud_cache_lock = threading.Lock()
+        self._FRAUD_CACHE_TTL = 5.0  # seconds — force recompute even if same files visible
+        self._gpu_window: int = _load_gpu_window()
+        # GPU role map: {"n25_0": "prep", "n25_1": "training", ...}
+        # Refreshed from k8s API so tiles never swap on pod restart.
+        self._gpu_role_map: dict = {}
+        self._gpu_role_map_ts: float = 0.0
         self._load_telemetry_cache()
 
     def _load_telemetry_cache(self) -> None:
@@ -95,6 +140,24 @@ class MetricsCollector:
             if _TELEMETRY_CACHE.exists():
                 self.state.last_telemetry = json.loads(_TELEMETRY_CACHE.read_text())
                 log.info("Loaded telemetry cache (%d stages)", len(self.state.last_telemetry))
+            
+            if _STATE_CACHE.exists():
+                state_data = json.loads(_STATE_CACHE.read_text())
+                self.state.total_rows_processed = state_data.get("total_rows", 0)
+                self.state.total_fraud_exposure_usd = state_data.get("total_fraud_exposure", 0.0)
+                self.state.total_fraud_flagged = state_data.get("total_fraud_flagged", 0)
+                self.state.total_amount_processed_usd = state_data.get("total_amount_processed", 0.0)
+                self.state._last_prep_chunk_id = state_data.get("last_chunk_id", -1)
+                # Mark all existing score files as already processed so restart doesn't double-count
+                if SCORES_PATH.exists():
+                    self.state._processed_score_files = {
+                        f.name for f in SCORES_PATH.glob("*.parquet")
+                        if not f.name.endswith(".processing")
+                    }
+                log.info("Loaded state cache (total_rows=%d, fraud_exposure=$%.2f, skipping %d existing score files)",
+                         self.state.total_rows_processed, self.state.total_fraud_exposure_usd,
+                         len(self.state._processed_score_files))
+            
         except Exception as exc:
             log.debug("load_telemetry_cache: %s", exc)
 
@@ -102,6 +165,16 @@ class MetricsCollector:
         try:
             _TELEMETRY_CACHE.parent.mkdir(parents=True, exist_ok=True)
             _TELEMETRY_CACHE.write_text(json.dumps(self.state.last_telemetry))
+            
+            state_data = {
+                "total_rows": self.state.total_rows_processed,
+                "total_fraud_exposure": self.state.total_fraud_exposure_usd,
+                "total_fraud_flagged": self.state.total_fraud_flagged,
+                "total_amount_processed": self.state.total_amount_processed_usd,
+                "last_chunk_id": self.state._last_prep_chunk_id,
+            }
+            _STATE_CACHE.write_text(json.dumps(state_data))
+            
         except Exception as exc:
             log.debug("save_telemetry_cache: %s", exc)
 
@@ -113,13 +186,17 @@ class MetricsCollector:
         # Skip pod-log telemetry when pipeline is stopped — stale log lines
         # would otherwise repopulate KPIs from the last run's data.
         telemetry  = self._parse_telemetry() if self.state.is_running else {}
+        if self.state.is_running:
+            self._update_fraud_metrics()
         system     = self._collect_system()
-        gpu        = self._collect_gpu()
+        gpu        = self._collect_gpu()        if self.state.is_running else self._gpu_zeros()
         business   = self._compute_kpis(telemetry)
+        if not self.state.is_running:
+            business['prep_rows_per_sec'] = 0
         storage    = self._collect_storage()
         flashblade = self._collect_flashblade()
         queue      = self._collect_queue_depth()
-        fraud      = self._collect_fraud_metrics()
+        fraud      = self._collect_fraud_metrics() if self.state.is_running else {}
 
         if telemetry:
             self.state.last_telemetry = telemetry
@@ -142,22 +219,73 @@ class MetricsCollector:
             "flashblade": flashblade,
             "system":    system,
             "gpu":       gpu,
+            "gpu_rt":    self._collect_gpu_rt() if self.state.is_running else self._gpu_zeros(),
+            "gpu_window_s": self._gpu_window,
         }
 
     def collect_fast(self) -> dict:
         """Light-weight collection: GPU, CPU, FlashBlade latency only.
-        Called at 200ms intervals between full collect() cycles."""
+        Called at 200ms intervals between full collect() cycles.
+        Also includes fraud metrics via TTL cache so category/geo data
+        refreshes every 5s independent of the slow full collect() cycle."""
         system     = self._collect_system()
-        gpu        = self._collect_gpu()
+        gpu        = self._collect_gpu()        if self.state.is_running else self._gpu_zeros()
         flashblade = self._collect_flashblade()
+        fraud      = self._collect_fraud_metrics() if self.state.is_running else {}
         return {
             "is_running":  self.state.is_running,
             "elapsed_sec": self.state.elapsed_sec,
             "timestamp":   time.time(),
             "system":    system,
             "gpu":       gpu,
+            "gpu_rt":    self._collect_gpu_rt() if self.state.is_running else self._gpu_zeros(),
+            "gpu_window_s": self._gpu_window,
             "flashblade": flashblade,
+            "fraud":     fraud,
         }
+
+    # ------------------------------------------------------------------
+    # Fraud metrics from scored Parquet files
+    # ------------------------------------------------------------------
+
+    def _update_fraud_metrics(self) -> None:
+        """Scan SCORES_PATH for new parquet files and accumulate fraud totals."""
+        try:
+            if not SCORES_PATH.exists():
+                return
+
+            # Find all .parquet files that aren't currently being written (.processing)
+            all_files = sorted(f.name for f in SCORES_PATH.glob("*.parquet")
+                              if not f.name.endswith(".processing"))
+            
+            # Identify files we haven't processed yet in this session
+            new_files = [f for f in all_files if f not in self.state._processed_score_files]
+            if not new_files:
+                return
+
+            log.info("Processing %d new score files for KPIs", len(new_files))
+            total_new_fraud_amt = 0.0
+            total_new_flagged = 0
+            total_new_txn_amt = 0.0
+
+            for fname in new_files:
+                fpath = SCORES_PATH / fname
+                try:
+                    df = pd.read_parquet(str(fpath), columns=["amt", "fraud_score"])
+                    fraud_mask = df["fraud_score"] > 0.5
+                    total_new_fraud_amt += df.loc[fraud_mask, "amt"].sum()
+                    total_new_flagged += int(fraud_mask.sum())
+                    total_new_txn_amt += df["amt"].sum()
+                    self.state._processed_score_files.add(fname)
+                except Exception as e:
+                    log.debug("Error reading %s: %s", fname, e)
+
+            self.state.total_fraud_exposure_usd += total_new_fraud_amt
+            self.state.total_fraud_flagged += total_new_flagged
+            self.state.total_amount_processed_usd += total_new_txn_amt
+            
+        except Exception as exc:
+            log.debug("_update_fraud_metrics: %s", exc)
 
     # ------------------------------------------------------------------
     # Telemetry from K8s pod logs
@@ -271,25 +399,63 @@ class MetricsCollector:
     # Fraud scores from GPU scoring output
     # ------------------------------------------------------------------
 
+    _FRAUD_COLS = ["fraud_score", "amt", "category", "state", "scored_at", "merchant", "trans_num"]
+
     def _collect_fraud_metrics(self) -> dict:
         try:
-            score_files = sorted(SCORES_PATH.glob("*.parquet"))[-10:] \
+            score_files = sorted(SCORES_PATH.glob("*.parquet"), key=lambda p: p.stat().st_mtime)[-10:] \
                           if SCORES_PATH.exists() else []
             if not score_files:
                 return {}
-            df = pd.concat([pd.read_parquet(str(f)) for f in score_files], ignore_index=True)
+            with self._fraud_cache_lock:
+                if self._fraud_cache and (time.time() - self._fraud_cache_at) < self._FRAUD_CACHE_TTL:
+                    return self._fraud_cache
+            df = pd.concat(
+                [pd.read_parquet(str(f), columns=self._FRAUD_COLS) for f in score_files],
+                ignore_index=True,
+            )
             if "fraud_score" not in df.columns:
                 return {}
             alerts = (df[df["fraud_score"] > 0.8]
                       .sort_values("scored_at", ascending=False)
-                      .head(20))
+                      .drop_duplicates(subset=["merchant"])
+                      .head(20)
+                      .sort_values("fraud_score", ascending=False))
             alert_cols = [c for c in ("trans_num", "merchant", "amt", "category", "fraud_score")
                           if c in alerts.columns]
-            return {
-                "fraud_rate_pct":  float((df["fraud_score"] > 0.5).mean() * 100),
-                "total_scored":    len(df),
-                "recent_alerts":   alerts[alert_cols].to_dict("records"),
+
+            # Real fraud-by-category: sum of amt for rows flagged as high-risk (> 0.5)
+            fraud_by_category = {}
+            if "category" in df.columns and "amt" in df.columns:
+                flagged = df[df["fraud_score"] > 0.5]
+                fraud_by_category = (
+                    flagged.groupby("category")["amt"].sum()
+                    .round(2)
+                    .to_dict()
+                )
+
+            # Fraud-by-geography: sum of fraud amt per state
+            fraud_by_geography = {}
+            if "state" in df.columns and "amt" in df.columns:
+                flagged_geo = df[df["fraud_score"] > 0.5]
+                fraud_by_geography = (
+                    flagged_geo.groupby("state")["amt"].sum()
+                    .round(2)
+                    .sort_values(ascending=False)
+                    .to_dict()
+                )
+
+            result = {
+                "fraud_rate_pct":     float((df["fraud_score"] > 0.5).mean() * 100),
+                "total_scored":       len(df),
+                "recent_alerts":      alerts[alert_cols].to_dict("records"),
+                "fraud_by_category":  fraud_by_category,
+                "fraud_by_geography": fraud_by_geography,
             }
+            with self._fraud_cache_lock:
+                self._fraud_cache = result
+                self._fraud_cache_at = time.time()
+            return result
         except Exception as exc:
             log.debug("_collect_fraud_metrics: %s", exc)
             return {}
@@ -355,44 +521,126 @@ class MetricsCollector:
     # GPU metrics via Prometheus / DCGM
     # ------------------------------------------------------------------
 
+    def _refresh_gpu_role_map(self) -> None:
+        """Build {node_short}_{gpu_index} → role mapping using DCGM's
+        exported_container label from Prometheus. The NVIDIA device plugin k8s
+        integration populates this label with the container name that owns each
+        GPU — no CUDA_VISIBLE_DEVICES or k8s API needed."""
+        now = time.time()
+        if now - self._gpu_role_map_ts < _GPU_ROLE_MAP_TTL and self._gpu_role_map:
+            return
+        try:
+            resp = requests.get(
+                f"{PROMETHEUS_URL}/api/v1/query",
+                params={"query": "DCGM_FI_DEV_GPU_UTIL"},
+                timeout=3,
+            )
+            resp.raise_for_status()
+            new_map: dict = {}
+            for result in resp.json().get("data", {}).get("result", []):
+                m                  = result.get("metric", {})
+                exported_container = m.get("exported_container", "")
+                role               = _APP_TO_ROLE.get(exported_container)
+                if not role:
+                    continue
+                hostname = m.get("Hostname", "unknown")
+                gpu_id   = m.get("gpu", "0")
+                short    = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
+                new_map[f"{short}_{gpu_id}"] = role
+            if new_map:
+                self._gpu_role_map = new_map
+                self._gpu_role_map_ts = now
+                log.info("GPU role map from DCGM exported_container: %s", new_map)
+        except Exception as exc:
+            log.warning("_refresh_gpu_role_map failed: %s", exc)
+
+    def _role_key(self, short: str, gpu_id: str, suffix: str) -> str:
+        """Return role-based key (e.g. gpu_prep_util_pct) if role map is known,
+        otherwise fall back to index-based key (gpu_n25_0_util_pct)."""
+        role = self._gpu_role_map.get(f"{short}_{gpu_id}")
+        if role:
+            return f"gpu_{role}_{suffix}"
+        return f"gpu_{short}_{gpu_id}_{suffix}"
+
     def _collect_gpu(self) -> dict:
         """Query DCGM GPU metrics for all GPU nodes (both .44 and .40).
 
-        Uses DCGM_FI_PROF_GR_ENGINE_ACTIVE (1s profiling metric, 0-1 range)
-        instead of DCGM_FI_DEV_GPU_UTIL (30s averaged %).  This shows actual
-        GPU engine activity spikes (e.g. 99% during mega-batch kernels).
+        Uses max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[Xs]) so tiles show
+        the peak GPU activity over the last X seconds (configurable via
+        gpu_util_window_s in demo_config.json, default 30s) rather than an
+        instant snapshot that reads 0% between mega-batch kernel bursts.
+
+        Falls back to DCGM_FI_DEV_GPU_UTIL if the profiling metric is not
+        exported by this cluster's DCGM configuration.
         """
+        self._refresh_gpu_role_map()
         try:
             metrics: dict = {}
-            for metric_name, key_prefix, scale in [
-                ("DCGM_FI_PROF_GR_ENGINE_ACTIVE", "gpu_{host}_{gpu}_util_pct", 100.0),
-                ("DCGM_FI_DEV_MEM_COPY_UTIL",     "gpu_{host}_{gpu}_mem_pct",  1.0),
+            window = f"{self._gpu_window}s"
+            for metric_name, suffix, scale in [
+                (f"max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[{window}])", "util_pct", 100.0),
+                (f"max_over_time(DCGM_FI_DEV_GPU_UTIL[{window}])",          "util_pct", 1.0),
+                (f"max_over_time(DCGM_FI_DEV_MEM_COPY_UTIL[{window}])",     "mem_pct",  1.0),
             ]:
-                # No hostname filter — get all GPUs across all nodes
+                if "DCGM_FI_DEV_GPU_UTIL" in metric_name:
+                    if any(k.endswith("_util_pct") for k in metrics):
+                        continue
+                    log.warning("_collect_gpu: profiling metric empty, falling back to DCGM_FI_DEV_GPU_UTIL (window=%s)", window)
                 resp = requests.get(
                     f"{PROMETHEUS_URL}/api/v1/query",
                     params={"query": metric_name}, timeout=3,
                 )
                 resp.raise_for_status()
                 for result in resp.json().get("data", {}).get("result", []):
-                    gpu_id = result.get("metric", {}).get("gpu", "0")
+                    gpu_id   = result.get("metric", {}).get("gpu", "0")
                     hostname = result.get("metric", {}).get("Hostname", "unknown")
-                    # Shorten hostname: slc6-lg-n3-b30-29 -> n29, slc6-lg-n3-b30-25 -> n25
-                    short = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
-                    key = key_prefix.format(host=short, gpu=gpu_id)
+                    short    = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
+                    key = self._role_key(short, gpu_id, suffix)
+                    metrics[key] = float(result["value"][1]) * scale
+            if not metrics:
+                log.warning("_collect_gpu: all queries empty (window=%s)", window)
+                return self._gpu_zeros()
+            return metrics
+        except Exception as exc:
+            log.warning("_collect_gpu failed: %s", exc)
+            return self._gpu_zeros()
+
+    def _collect_gpu_rt(self) -> dict:
+        """1s max_over_time GPU util for chart — catches brief GPU bursts that
+        instant queries miss, while staying near real-time."""
+        try:
+            metrics: dict = {}
+            for metric_name, suffix, scale in [
+                ("max_over_time(DCGM_FI_PROF_GR_ENGINE_ACTIVE[1s])", "util_pct", 100.0),
+                ("max_over_time(DCGM_FI_DEV_GPU_UTIL[1s])",          "util_pct", 1.0),
+                ("max_over_time(DCGM_FI_DEV_MEM_COPY_UTIL[1s])",     "mem_pct",  1.0),
+            ]:
+                if "DCGM_FI_DEV_GPU_UTIL" in metric_name:
+                    if any(k.endswith("_util_pct") for k in metrics):
+                        continue
+                resp = requests.get(
+                    f"{PROMETHEUS_URL}/api/v1/query",
+                    params={"query": metric_name}, timeout=3,
+                )
+                resp.raise_for_status()
+                for result in resp.json().get("data", {}).get("result", []):
+                    gpu_id   = result.get("metric", {}).get("gpu", "0")
+                    hostname = result.get("metric", {}).get("Hostname", "unknown")
+                    short    = "n" + hostname.split("-")[-1] if "-" in hostname else hostname
+                    key = self._role_key(short, gpu_id, suffix)
                     metrics[key] = float(result["value"][1]) * scale
             return metrics if metrics else self._gpu_zeros()
         except Exception as exc:
-            log.debug("_collect_gpu: %s", exc)
+            log.warning("_collect_gpu_rt failed: %s", exc)
             return self._gpu_zeros()
 
     @staticmethod
     def _gpu_zeros() -> dict:
         return {
-            "gpu_n29_0_util_pct": 0.0, "gpu_n29_0_mem_pct": 0.0,
-            "gpu_n29_1_util_pct": 0.0, "gpu_n29_1_mem_pct": 0.0,
-            "gpu_n25_0_util_pct": 0.0, "gpu_n25_0_mem_pct": 0.0,
-            "gpu_n25_1_util_pct": 0.0, "gpu_n25_1_mem_pct": 0.0,
+            "gpu_scoring_util_pct":  0.0, "gpu_scoring_mem_pct":  0.0,
+            "gpu_triton_util_pct":   0.0, "gpu_triton_mem_pct":   0.0,
+            "gpu_prep_util_pct":     0.0, "gpu_prep_mem_pct":     0.0,
+            "gpu_training_util_pct": 0.0, "gpu_training_mem_pct": 0.0,
         }
 
     # ------------------------------------------------------------------
@@ -448,32 +696,62 @@ class MetricsCollector:
         # After reset (no rows processed yet), return zeros
         prep       = telemetry.get("prep",    self.state.last_telemetry.get("prep", {}))
         scoring    = telemetry.get("scoring", self.state.last_telemetry.get("scoring", {}))
-        # Accumulate rows processed across batches (each telemetry has a chunk_id)
-        chunk_id = int(prep.get("chunk_id", -1))
-        batch_rows = int(prep.get("rows", 0))
-        if chunk_id >= 0 and chunk_id != self.state._last_prep_chunk_id:
+        # Accumulate rows from scoring telemetry (each telemetry has a chunk_id)
+        chunk_id = int(scoring.get("chunk_id", -1))
+        batch_rows = int(scoring.get("rows", 0))
+        if chunk_id >= 0 and chunk_id != self.state._last_scoring_chunk_id:
             self.state.total_rows_processed += batch_rows
-            self.state._last_prep_chunk_id = chunk_id
+            self.state._last_scoring_chunk_id = chunk_id
         total_txns = self.state.total_rows_processed
         if total_txns == 0:
             return {
                 "total_transactions": 0, "prep_rows_per_sec": 0,
                 "fraud_flagged": 0, "fraud_rate_pct": 0.0, "fraud_exposure_usd": 0.0,
             }
-        # Compute rows/sec from feature computation time only (excludes NFS read + arrow)
-        feat_time = float(prep.get("feat_time_s", 0))
-        prep_rps = int(batch_rows / feat_time) if feat_time > 0 else 0
-        # Prefer real fraud rate from scorer; fall back to synthetic rate
-        fraud_rate = float(scoring.get("fraud_rate", 0.005))
-        fraud_flagged = int(total_txns * fraud_rate)
-        avg_fraud_amt = 250.0
-        fraud_exposure = fraud_flagged * avg_fraud_amt
+        
+        # TPS = rows scored in last batch / time that batch took (stable, no decay between batches)
+        scoring_rows = int(scoring.get("rows", 0))
+        scoring_latency_ms = float(scoring.get("latency_ms", 0))
+        if scoring_rows > 0 and scoring_latency_ms > 0:
+            prep_rps = int(scoring_rows / (scoring_latency_ms / 1000))
+        else:
+            prep_rps = 0
+        
+        # Use real cumulative metrics from scoring files
+        fraud_flagged = self.state.total_fraud_flagged
+        fraud_exposure = self.state.total_fraud_exposure_usd
+        
+        # Calculate real-time fraud rate from last chunk or overall average
+        last_fraud_rate = float(scoring.get("fraud_rate", 0.0))
+        if last_fraud_rate > 0:
+            display_rate = last_fraud_rate
+        else:
+            # Fallback to cumulative average if no recent telemetry
+            display_rate = (fraud_flagged / total_txns) if total_txns > 0 else 0.0
+
+        prep_gpu_time_s = float(prep.get("gpu_time_s", 0.0))
+        prep_rows = int(prep.get("rows", 0))
+
+        prep_latency_ms = (
+            (prep_gpu_time_s * 1000) / prep_rows
+            if prep_rows > 0 and prep_gpu_time_s > 0 else 0.0
+        )
+
+        scoring_latency_per_row_ms = (
+            scoring_latency_ms / scoring_rows
+            if scoring_rows > 0 and scoring_latency_ms > 0 else 0.0
+        )
+
+        decision_latency_ms = prep_latency_ms + scoring_latency_per_row_ms
+
         return {
             "total_transactions": total_txns,
             "prep_rows_per_sec": prep_rps,
             "fraud_flagged": fraud_flagged,
-            "fraud_rate_pct": round(fraud_rate * 100, 2),
+            "fraud_rate_pct": round(display_rate * 100, 2),
             "fraud_exposure_usd": round(fraud_exposure, 0),
+            "total_amount_processed_usd": round(self.state.total_amount_processed_usd, 0),
+            "decision_latency_ms": round(decision_latency_ms, 3),
         }
 
     # ------------------------------------------------------------------

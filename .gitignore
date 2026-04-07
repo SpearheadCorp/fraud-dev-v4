@@ -7,6 +7,7 @@ CLAUDE.md
 ARCHITECTURE.md
 TODO.md
 MEMORY.md
+expectedbehaviours.md
 
 # Seed data zip (large binary — scp to build VM separately, not in git)
 seed-data/*.zip

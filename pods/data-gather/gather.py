@@ -84,8 +84,148 @@ CATEGORY_MAX_AMT = {
     "misc_pos":      3000.0,
     "misc_net":      3000.0,
 }
-# Per-category cap array aligned with ALL_CATEGORIES index order.
+CATEGORY_MIN_AMT = {
+    "grocery_pos":     8.0,
+    "grocery_net":    15.0,
+    "gas_transport":   5.0,
+    "food_dining":     4.0,
+    "personal_care":   5.0,
+    "kids_pets":       8.0,
+    "health_fitness": 15.0,
+    "entertainment":   5.0,
+    "home":           20.0,
+    "travel":         89.0,
+    "shopping_pos":    8.0,
+    "shopping_net":    5.0,
+    "misc_pos":        3.0,
+    "misc_net":        5.0,
+}
+# Realistic merchant name pools keyed by category.
+# Names use the "fraud_" prefix to match the Kaggle-style synthetic data format.
+CATEGORY_MERCHANTS = {
+    "grocery_pos": [
+        "fraud_Whole_Foods_Market", "fraud_Kroger_Co", "fraud_Safeway_Inc",
+        "fraud_Publix_Super_Markets", "fraud_Trader_Joes", "fraud_Aldi_Inc",
+        "fraud_Costco_Wholesale", "fraud_Walmart_Grocery", "fraud_Target_Grocery",
+        "fraud_Wegmans_Food", "fraud_HEB_Grocery", "fraud_Meijer_Inc",
+        "fraud_Stop_Shop", "fraud_Food_Lion_LLC", "fraud_Giant_Food",
+        "fraud_Sprouts_Farmers", "fraud_Winn_Dixie", "fraud_Harris_Teeter",
+        "fraud_ShopRite_Stores", "fraud_Ralphs_Grocery",
+    ],
+    "grocery_net": [
+        "fraud_Instacart_Inc", "fraud_Amazon_Fresh", "fraud_Walmart_Online_Grocery",
+        "fraud_Target_Drive_Up", "fraud_Shipt_Delivery", "fraud_FreshDirect_LLC",
+        "fraud_Peapod_Online", "fraud_Thrive_Market", "fraud_Boxed_Wholesale",
+        "fraud_Imperfect_Foods", "fraud_Misfits_Market", "fraud_Good_Eggs_Inc",
+        "fraud_Hungryroot_Inc",
+    ],
+    "gas_transport": [
+        "fraud_Shell_Oil_Co", "fraud_ExxonMobil_Corp", "fraud_BP_Gas_Station",
+        "fraud_Chevron_Corp", "fraud_Valero_Energy", "fraud_Sunoco_LP",
+        "fraud_Marathon_Petroleum", "fraud_Phillips_66", "fraud_76_Gas_Station",
+        "fraud_Speedway_LLC", "fraud_Circle_K_Stores", "fraud_Wawa_Fuel",
+        "fraud_QuikTrip_Corp", "fraud_Caseys_General", "fraud_RaceTrac_Petroleum",
+        "fraud_Pilot_Flying_J", "fraud_Loves_Travel", "fraud_Uber_Rideshare",
+        "fraud_Lyft_Inc", "fraud_MTA_Transit_Auth",
+    ],
+    "food_dining": [
+        "fraud_McDonalds_Corp", "fraud_Starbucks_Coffee", "fraud_Chipotle_Mexican",
+        "fraud_Subway_Restaurants", "fraud_Dominos_Pizza", "fraud_Pizza_Hut_LLC",
+        "fraud_Olive_Garden_Rest", "fraud_Panera_Bread_Co", "fraud_Chilis_Grill",
+        "fraud_Applebees_Intl", "fraud_Dunkin_Brands", "fraud_Burger_King_Corp",
+        "fraud_Taco_Bell_Corp", "fraud_Wendys_Intl", "fraud_KFC_Corp",
+        "fraud_IHOP_Restaurants", "fraud_Dennys_Inc", "fraud_Cracker_Barrel",
+        "fraud_Buffalo_Wild_Wings", "fraud_Cheesecake_Factory",
+    ],
+    "entertainment": [
+        "fraud_Netflix_Inc", "fraud_Spotify_AB", "fraud_AMC_Theatres",
+        "fraud_Regal_Entertainment", "fraud_Hulu_LLC", "fraud_Disney_Plus",
+        "fraud_Xbox_Live_Gold", "fraud_PlayStation_Network", "fraud_Steam_Games",
+        "fraud_Ticketmaster_Inc", "fraud_StubHub_Inc", "fraud_Apple_iTunes",
+        "fraud_YouTube_Premium", "fraud_HBO_Max_Subs", "fraud_Peacock_TV",
+        "fraud_Amazon_Prime_Video", "fraud_Twitch_Interactive", "fraud_ESPN_Plus",
+        "fraud_Paramount_Plus", "fraud_Discovery_Plus",
+    ],
+    "travel": [
+        "fraud_Delta_Air_Lines", "fraud_United_Airlines", "fraud_American_Airlines",
+        "fraud_Southwest_Airlines", "fraud_Marriott_Hotels", "fraud_Hilton_Worldwide",
+        "fraud_Airbnb_Inc", "fraud_Hyatt_Hotels_Corp", "fraud_Expedia_Group",
+        "fraud_Booking_Holdings", "fraud_Choice_Hotels_Intl", "fraud_IHG_Hotels",
+        "fraud_Wyndham_Hotels", "fraud_Enterprise_Rent_Car", "fraud_Hertz_Corp",
+        "fraud_Avis_Budget_Group", "fraud_Royal_Caribbean_Intl", "fraud_Carnival_Cruise",
+        "fraud_Norwegian_Cruise", "fraud_Amtrak_Rail",
+    ],
+    "shopping_pos": [
+        "fraud_Macys_Inc", "fraud_Nordstrom_Inc", "fraud_TJ_Maxx_Corp",
+        "fraud_Best_Buy_Co", "fraud_Gap_Inc", "fraud_Old_Navy_LLC",
+        "fraud_Home_Depot_Inc", "fraud_Lowes_Companies", "fraud_Target_Corp",
+        "fraud_Kohls_Corp", "fraud_Bed_Bath_Beyond", "fraud_Ross_Stores_Inc",
+        "fraud_Burlington_Coat", "fraud_DSW_Shoes_Inc", "fraud_Foot_Locker_Inc",
+        "fraud_GameStop_Corp", "fraud_Five_Below_Inc", "fraud_Dollar_General",
+        "fraud_Marshalls_Inc", "fraud_Sears_Holdings",
+    ],
+    "shopping_net": [
+        "fraud_Amazon_Marketplace", "fraud_eBay_Inc", "fraud_Etsy_Inc",
+        "fraud_Wayfair_LLC", "fraud_Chewy_Inc", "fraud_Zara_Online",
+        "fraud_ASOS_PLC", "fraud_Shein_Group", "fraud_Zappos_Amazon",
+        "fraud_Overstock_com", "fraud_Newegg_Commerce", "fraud_Walmart_Online",
+        "fraud_Target_Online_Retail", "fraud_Rakuten_Inc", "fraud_Wish_Inc",
+        "fraud_Nike_Direct_Store", "fraud_Adidas_Online", "fraud_Apple_Store_Online",
+        "fraud_Microsoft_Store", "fraud_Shopify_Merchant",
+    ],
+    "personal_care": [
+        "fraud_Ulta_Beauty_Inc", "fraud_Sephora_Inc", "fraud_CVS_Pharmacy",
+        "fraud_Walgreens_Boots", "fraud_Great_Clips_Inc", "fraud_Sport_Clips_Inc",
+        "fraud_Regis_Salons", "fraud_Sally_Beauty_Co", "fraud_Bath_Body_Works",
+        "fraud_Aveda_Corp", "fraud_Supercuts_Inc", "fraud_Hair_Cuttery",
+        "fraud_Rite_Aid_Corp", "fraud_Cost_Cutters", "fraud_OPI_Products",
+        "fraud_Estee_Lauder_Co", "fraud_LUSH_Cosmetics", "fraud_Nail_Pro_Salon",
+    ],
+    "health_fitness": [
+        "fraud_Planet_Fitness_Inc", "fraud_LA_Fitness_Intl", "fraud_Golds_Gym",
+        "fraud_Equinox_Holdings", "fraud_CVS_Health_Corp", "fraud_Walgreens_Health",
+        "fraud_GNC_Holdings", "fraud_Vitamin_Shoppe_Inc", "fraud_Peloton_Interactive",
+        "fraud_ClassPass_Inc", "fraud_Anytime_Fitness", "fraud_24_Hour_Fitness",
+        "fraud_YMCA_USA", "fraud_SoulCycle_Inc", "fraud_Orangetheory_Fitness",
+        "fraud_Crunch_Fitness", "fraud_Bowflex_Direct", "fraud_MyFitnessPal_Inc",
+    ],
+    "kids_pets": [
+        "fraud_PetSmart_Inc", "fraud_Petco_Animal_Supplies", "fraud_Chewy_Pets",
+        "fraud_Build_A_Bear_Workshop", "fraud_Chuck_E_Cheese", "fraud_Kids_Foot_Locker",
+        "fraud_Carters_Inc", "fraud_OshKosh_BGosh", "fraud_Petsense_LLC",
+        "fraud_Learning_Express", "fraud_Gymboree_Corp", "fraud_Justice_Girls",
+        "fraud_American_Girl_LLC", "fraud_Stride_Rite_Corp", "fraud_PetMeds_Express",
+        "fraud_BarkBox_Subscription", "fraud_Legoland_Parks", "fraud_Discovery_Kids",
+    ],
+    "home": [
+        "fraud_IKEA_North_America", "fraud_Home_Depot_Inc", "fraud_Lowes_Home_Imp",
+        "fraud_Wayfair_Home_Decor", "fraud_Restoration_Hardware", "fraud_Williams_Sonoma",
+        "fraud_Pottery_Barn_LLC", "fraud_Crate_Barrel_Inc", "fraud_West_Elm_LLC",
+        "fraud_Pier_1_Imports", "fraud_HomeGoods_Inc", "fraud_Arhaus_Furniture",
+        "fraud_Ashley_Furniture", "fraud_Sleep_Number_Corp", "fraud_Purple_Mattress",
+        "fraud_Casper_Sleep_Inc", "fraud_Tempur_Pedic_Intl", "fraud_Kohler_Co",
+        "fraud_Moen_Inc", "fraud_Andersen_Windows",
+    ],
+    "misc_pos": [
+        "fraud_Dollar_General_Corp", "fraud_Dollar_Tree_Inc", "fraud_Five_Below_Inc",
+        "fraud_Burlington_Stores", "fraud_Ross_Dress_Less", "fraud_Marshalls_LLC",
+        "fraud_Tuesday_Morning_Corp", "fraud_Big_Lots_Inc", "fraud_Family_Dollar",
+        "fraud_99_Cents_Only", "fraud_Harbor_Freight_Tools", "fraud_Ace_Hardware",
+        "fraud_Office_Depot_Inc", "fraud_Staples_Inc", "fraud_Michaels_Stores",
+        "fraud_Hobby_Lobby_Stores", "fraud_Joann_Stores_Inc", "fraud_Party_City_Corp",
+    ],
+    "misc_net": [
+        "fraud_PayPal_Holdings", "fraud_Square_Inc", "fraud_Stripe_Payments",
+        "fraud_Google_Pay_Svcs", "fraud_Apple_Pay_Svcs", "fraud_Zelle_Network",
+        "fraud_Western_Union_Co", "fraud_MoneyGram_Intl", "fraud_Cash_App_Inc",
+        "fraud_Venmo_LLC", "fraud_Coinbase_Global", "fraud_Robinhood_Markets",
+        "fraud_Chime_Financial", "fraud_Green_Dot_Corp", "fraud_Netspend_Corp",
+        "fraud_Amazon_Pay_Svcs", "fraud_Adyen_NV", "fraud_Checkout_com",
+    ],
+}
+# Per-category cap/floor arrays aligned with ALL_CATEGORIES index order.
 _CAT_CAPS = np.array([CATEGORY_MAX_AMT.get(c, 3000.0) for c in ALL_CATEGORIES], dtype=np.float64)
+_CAT_MINS = np.array([CATEGORY_MIN_AMT.get(c, 1.0) for c in ALL_CATEGORIES], dtype=np.float64)
 
 US_STATES = [
     "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -129,16 +269,10 @@ _HARDCODED_DEFAULTS: dict = {
 # ---------------------------------------------------------------------------
 
 def _build_identity_pools() -> tuple:
-    """Build fixed cardholder and merchant name pools."""
-    rng = np.random.default_rng(42)
-    faker = Faker("en_US")
-    Faker.seed(42)
+    """Build fixed cardholder pool. Merchant pools are now per-category (see CATEGORY_MERCHANTS)."""
+    rng = np.random.default_rng()
     cc_num_pool = rng.integers(10**15, 10**16 - 1, NUM_USERS)
-    merchant_pool = [
-        "fraud_" + faker.company().replace(",", "").replace(" ", "_")[:28]
-        for _ in range(NUM_MERCHANTS)
-    ]
-    return cc_num_pool, merchant_pool
+    return cc_num_pool, []  # merchant_pool unused; kept for signature compat
 
 
 def _open_csv(seed_path: Path) -> pd.DataFrame:
@@ -244,8 +378,7 @@ def _weighted_choice(cumprobs, rng, n, cp):
 def _build_gpu_pools(dist, cc_num_pool, merchant_pool, cp):
     """Pre-build GPU-resident arrays and string pools for generation."""
     faker = Faker("en_US")
-    Faker.seed(12345)
-    _rng = np.random.default_rng(42)
+    _rng = np.random.default_rng()
 
     # String pools as numpy arrays for fast fancy indexing.
     first_pool = np.array([faker.first_name() for _ in range(500)])
@@ -254,9 +387,14 @@ def _build_gpu_pools(dist, cc_num_pool, merchant_pool, cp):
     city_pool = np.array([faker.city()[:30] for _ in range(500)])
     job_pool = np.array([faker.job()[:40] for _ in range(500)])
     trans_pool = np.array([f"{_rng.integers(10**15, 10**16):016x}" for _ in range(100_000)])
-    merchant_pool_arr = np.array(merchant_pool)
     state_pool = np.array(US_STATES)
     cat_pool = np.array(ALL_CATEGORIES)
+
+    # Per-category merchant pools: one numpy array of strings per category,
+    # aligned with ALL_CATEGORIES index order for O(1) lookup by cat_idx.
+    cat_merch_pools = [
+        np.array(CATEGORY_MERCHANTS[cat]) for cat in ALL_CATEGORIES
+    ]
 
     # GPU-resident cumulative probability arrays for weighted sampling.
     gpu_dist = {
@@ -275,12 +413,13 @@ def _build_gpu_pools(dist, cc_num_pool, merchant_pool, cp):
         "unix_range": dist["unix_range"],
         "zip_range": dist["zip_range"],
         "cat_caps_gpu": cp.asarray(_CAT_CAPS),
+        "cat_mins_gpu": cp.asarray(_CAT_MINS),
         "high_fraud_mask_set": HIGH_FRAUD_INDICES,
     }
 
     pools = {
         "cc_num": cp.asarray(cc_num_pool),  # int64 on GPU
-        "merchant": merchant_pool_arr,
+        "cat_merch": cat_merch_pools,        # list[np.ndarray], one per category
         "first": first_pool,
         "last": last_pool,
         "street": street_pool,
@@ -331,14 +470,15 @@ def generate_chunk_gpu(chunk_id, n_rows, seed_offset, gpu_dist, pools, cudf, cp)
     base_unix = rng.randint(lo, hi, n).astype(cp.int64)
     unix_time = (base_unix - (base_unix % 86400)) + hours.astype(cp.int64) * 3600 + rng.randint(0, 3600, n).astype(cp.int64)
 
-    # ── Amounts (category-aware caps) ────────────────────────────────────
+    # ── Amounts (category-aware caps and floors) ──────────────────────────
     caps = d["cat_caps_gpu"][cat_idx]
+    mins = d["cat_mins_gpu"][cat_idx]
     raw_legit = rng.lognormal(0.0, 0.8, n) / 5.0
     raw_fraud = rng.lognormal(0.0, 1.0, n) / 4.0
     raw_legit = cp.clip(raw_legit, 0.0, 1.0)
     raw_fraud = cp.clip(raw_fraud, 0.0, 1.0)
     amt = cp.where(is_fraud, raw_fraud * caps, raw_legit * caps)
-    amt = cp.clip(amt, 1.0, caps)
+    amt = cp.clip(amt, mins, caps)
     amt = cp.around(amt, 2)
 
     # ── Geographic coordinates ───────────────────────────────────────────
@@ -376,8 +516,15 @@ def generate_chunk_gpu(chunk_id, n_rows, seed_offset, gpu_dist, pools, cudf, cp)
     gender_cpu = cp.asnumpy(rng.random_sample(n) < 0.55)
     genders = np.where(gender_cpu, "F", "M")
 
-    mi = cp.asnumpy(rng.randint(0, len(pools["merchant"]), n))
-    merchants = pools["merchant"][mi]
+    # Category-aware merchant selection: generate indices directly in each
+    # pool's range (no modulo) to avoid bias clustering on specific merchants.
+    merchants = np.empty(n, dtype=object)
+    for ci, cat_pool_arr in enumerate(pools["cat_merch"]):
+        mask = cat_idx_cpu == ci
+        count = int(mask.sum())
+        if count > 0:
+            within = cp.asnumpy(rng.randint(0, len(cat_pool_arr), count))
+            merchants[mask] = cat_pool_arr[within]
 
     fi = cp.asnumpy(rng.randint(0, len(pools["first"]), n))
     firsts = pools["first"][fi]
@@ -503,7 +650,7 @@ def main() -> None:
 
     # Build identity pools and GPU-resident distribution arrays.
     cc_num_pool, merchant_pool = _build_identity_pools()
-    log.info("Identity pools: %d users, %d merchants", NUM_USERS, NUM_MERCHANTS)
+    log.info("Identity pools: %d users, %d merchant categories", NUM_USERS, len(ALL_CATEGORIES))
     gpu_dist, pools = _build_gpu_pools(dist, cc_num_pool, merchant_pool, cp)
 
     chunk_size = CHUNK_SIZE

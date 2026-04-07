@@ -131,7 +131,7 @@ FEATURE_COLS = [
 ]
 
 _REQUIRED_COLS = ["amt", "lat", "long", "merch_lat", "merch_long", "unix_time", "is_fraud"]
-_PASSTHROUGH_COLS = ["cc_num", "merchant", "trans_num", "category", "chunk_ts"]
+_PASSTHROUGH_COLS = ["cc_num", "merchant", "trans_num", "category", "chunk_ts", "state"]
 
 
 # ---------------------------------------------------------------------------
@@ -156,8 +156,9 @@ _POD_PREFIX = os.environ.get("HOSTNAME", str(os.getpid()))
 
 def _claim_files(max_files: int) -> list:
     """Claim up to max_files via atomic rename. Returns list of (proc_path, out_path, tmp_path) tuples."""
-    files = sorted(f for f in INPUT_PATH.glob("*.parquet")
-                   if not f.name.endswith((".processing", ".done")))
+    files = sorted((f for f in INPUT_PATH.glob("*.parquet")
+                   if not f.name.endswith((".processing", ".done"))),
+                   key=lambda p: p.stat().st_mtime)
     claimed = []
     for f in files:
         if len(claimed) >= max_files:

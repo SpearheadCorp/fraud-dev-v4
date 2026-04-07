@@ -1,1175 +1,2902 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fraud Detection Demo v4</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-  :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --border: #30363d;
-    --text: #e6edf3;
-    --text-muted: #8b949e;
-    --accent: #58a6ff;
-    --green: #3fb950;
-    --red: #f85149;
-    --orange: #e3b341;
-    --purple: #bc8cff;
-    --teal: #39d353;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fraud Detection Demo v4</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/numeral@2.0.6/numeral.min.js"></script>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-muted: #8b949e;
+        --accent: #58a6ff;
+        --green: #3fb950;
+        --red: #f85149;
+        --orange: #e3b341;
+        --purple: #bc8cff;
+        --teal: #39d353;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 14px;
+      }
 
-  /* Header */
-  header {
-    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
-  }
-  header h1 { font-size: 16px; font-weight: 700; color: var(--text); white-space: nowrap; }
-  .live-badge {
-    display: flex; align-items: center; gap: 5px; font-size: 12px;
-    color: var(--green); background: rgba(63, 185, 80, 0.1);
-    padding: 2px 8px; border-radius: 20px; border: 1px solid rgba(63,185,80,0.3);
-  }
-  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-  .elapsed { color: var(--text-muted); font-size: 12px; }
-  .header-right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      /* Header */
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 20px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+      }
+      header h1 {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--text);
+        white-space: nowrap;
+      }
+      .live-badge {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--green);
+        background: rgba(63, 185, 80, 0.1);
+        padding: 2px 8px;
+        border-radius: 20px;
+        border: 1px solid rgba(63, 185, 80, 0.3);
+      }
+      .live-badge.error {
+        color: #f85149;
+        background: rgba(248, 81, 73, 0.1);
+        border-color: rgba(248, 81, 73, 0.3);
+      }
+      .live-badge.starting {
+        color: #e3b341;
+        background: rgba(227, 179, 65, 0.1);
+        border-color: rgba(227, 179, 65, 0.3);
+      }
+      .live-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green);
+        animation: pulse 1.5s infinite;
+      }
+      .live-badge.error .live-dot {
+        background: #f85149;
+        animation: none;
+      }
+      .live-badge.starting .live-dot {
+        background: #e3b341;
+        animation: pulse 1.5s infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+      .env-badge {
+        font-size: 11px;
+        font-weight: 700;
+        padding: 2px 9px;
+        border-radius: 20px;
+        letter-spacing: 0.06em;
+      }
+      .env-badge.dev {
+        color: #e3b341;
+        background: rgba(227, 179, 65, 0.12);
+        border: 1px solid rgba(227, 179, 65, 0.35);
+      }
+      .env-badge.prod {
+        color: #58a6ff;
+        background: rgba(88, 166, 255, 0.12);
+        border: 1px solid rgba(88, 166, 255, 0.35);
+      }
+      .elapsed {
+        color: var(--text-muted);
+        font-size: 12px;
+      }
+      .header-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+      }
 
-  /* Buttons */
-  button {
-    padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
-    cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.15s;
-  }
-  .btn-primary { background: var(--accent); color: #000; border-color: var(--accent); }
-  .btn-primary:hover { filter: brightness(1.1); }
-  .btn-danger { background: var(--red); color: #fff; border-color: var(--red); }
-  .btn-danger:hover { filter: brightness(1.1); }
-  .btn-secondary { background: var(--surface); color: var(--text); }
-  .btn-secondary:hover { background: #21262d; }
-  button:disabled { opacity: 0.35; cursor: not-allowed; filter: none !important; }
+      /* Buttons */
+      button {
+        padding: 6px 14px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.15s;
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: #000;
+        border-color: var(--accent);
+      }
+      .btn-primary:hover {
+        filter: brightness(1.1);
+      }
+      .btn-danger {
+        background: var(--red);
+        color: #fff;
+        border-color: var(--red);
+      }
+      .btn-danger:hover {
+        filter: brightness(1.1);
+      }
+      .btn-secondary {
+        background: var(--surface);
+        color: var(--text);
+      }
+      .btn-secondary:hover {
+        background: #21262d;
+      }
+      button:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+        filter: none !important;
+      }
 
-  /* Pod startup modal */
-  #pod-modal-backdrop {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65);
-    z-index: 1000; align-items: center; justify-content: center;
-  }
-  #pod-modal-backdrop.visible { display: flex; }
-  #pod-modal {
-    position: relative;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-    padding: 28px 32px; min-width: 400px; max-width: 520px; width: 90%;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-  }
-  #pod-modal-close-x {
-    position: absolute; top: 10px; right: 14px;
-    background: none; border: none; color: var(--text-muted); font-size: 22px;
-    cursor: pointer; padding: 2px 6px; line-height: 1; border-radius: 4px;
-  }
-  #pod-modal-close-x:hover { color: var(--text); background: rgba(255,255,255,0.08); }
-  #pod-modal h2 { margin: 0 0 6px; font-size: 18px; color: var(--text); padding-right: 28px; }
-  #pod-modal .pod-modal-sub { color: var(--text-muted); font-size: 13px; margin-bottom: 22px; }
-  #pod-modal-chips { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
-  .pod-modal-row { display: flex; align-items: center; gap: 10px; font-size: 14px; padding: 6px 10px; border-radius: 5px; background: rgba(255,255,255,0.03); }
-  .pod-modal-row .icon { font-size: 15px; font-weight: 700; width: 20px; text-align: center; }
-  .pod-ready   { color: var(--green); }
-  .pod-scaling { color: var(--orange); }
-  .pod-stopped { color: var(--text-muted); }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .pod-scaling .icon { display: inline-block; animation: spin 1s linear infinite; }
-  #pod-modal-dismiss {
-    display: none; width: 100%; background: var(--green); color: #000; border: none;
-    padding: 10px 24px; border-radius: 6px; font-size: 14px; font-weight: 700;
-    cursor: pointer; transition: opacity .15s;
-  }
-  #pod-modal-dismiss:hover { opacity: 0.85; }
-  #pod-modal-cancel {
-    display: none; width: 100%; background: transparent; color: var(--text-muted);
-    border: 1px solid var(--border); padding: 9px 24px; border-radius: 6px;
-    font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; transition: opacity .15s;
-  }
-  #pod-modal-cancel:hover { opacity: 0.7; }
-  #pod-modal-btn-row { display: flex; flex-direction: column; gap: 0; }
+      /* Pod startup modal */
+      #pod-modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      #pod-modal-backdrop.visible {
+        display: flex;
+      }
+      #pod-modal {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 28px 32px;
+        min-width: 400px;
+        max-width: 520px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+      }
+      #pod-modal-close-x {
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        font-size: 22px;
+        cursor: pointer;
+        padding: 2px 6px;
+        line-height: 1;
+        border-radius: 4px;
+      }
+      #pod-modal-close-x:hover {
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.08);
+      }
+      #pod-modal h2 {
+        margin: 0 0 6px;
+        font-size: 18px;
+        color: var(--text);
+        padding-right: 28px;
+      }
+      #pod-modal .pod-modal-sub {
+        color: var(--text-muted);
+        font-size: 13px;
+        margin-bottom: 22px;
+      }
+      #pod-modal-chips {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 24px;
+      }
+      .pod-modal-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        padding: 6px 10px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.03);
+      }
+      .pod-modal-row .icon {
+        font-size: 15px;
+        font-weight: 700;
+        width: 20px;
+        text-align: center;
+      }
+      .pod-ready {
+        color: var(--green);
+      }
+      .pod-scaling {
+        color: var(--orange);
+      }
+      .pod-stopped {
+        color: var(--text-muted);
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .pod-scaling .icon {
+        display: inline-block;
+        animation: spin 1s linear infinite;
+      }
+      #pod-modal-dismiss {
+        display: none;
+        width: 100%;
+        background: var(--green);
+        color: #000;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity 0.15s;
+      }
+      #pod-modal-dismiss:hover {
+        opacity: 0.85;
+      }
+      #pod-modal-cancel {
+        display: none;
+        width: 100%;
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        padding: 9px 24px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 8px;
+        transition: opacity 0.15s;
+      }
+      #pod-modal-cancel:hover {
+        opacity: 0.7;
+      }
+      #pod-modal-btn-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
 
-  /* Tabs */
-  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; background: var(--surface); }
-  .tab-btn {
-    padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 500;
-    border: none; background: none; color: var(--text-muted); border-bottom: 2px solid transparent;
-    transition: all 0.15s; margin-bottom: -1px;
-  }
-  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .tab-btn:hover:not(.active) { color: var(--text); }
+      /* Tabs */
+      .tabs {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        border-bottom: 1px solid var(--border);
+        padding: 0 20px;
+        background: var(--surface);
+      }
+      .tab-btn {
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        border: none;
+        background: none;
+        color: var(--text-muted);
+        border-bottom: 2px solid transparent;
+        transition: all 0.15s;
+        margin-bottom: -1px;
+      }
+      .tab-btn.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      .tab-btn:hover:not(.active) {
+        color: var(--text);
+      }
+      .tab-controls {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 0;
+      }
 
-  /* Tab content */
-  .tab-pane { display: none; padding: 20px; }
-  .tab-pane.active { display: block; }
+      /* Tab content */
+      .tab-pane {
+        display: none;
+        padding: 20px;
+      }
+      .tab-pane.active {
+        display: block;
+      }
 
-  /* KPI cards */
-  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-  .kpi-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 14px 16px;
-  }
-  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 6px; }
-  .kpi-value { font-size: 24px; font-weight: 700; color: var(--text); }
-  .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-  .kpi-card.highlight .kpi-value { color: var(--orange); }
-  .kpi-card.good .kpi-value { color: var(--green); }
-  .kpi-card.accent .kpi-value { color: var(--accent); }
+      /* KPI cards */
+      .kpi-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .kpi-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px 16px;
+      }
+      .kpi-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+      .kpi-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .kpi-sub {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+      .kpi-card.highlight .kpi-value {
+        color: var(--orange);
+      }
+      .kpi-card.good .kpi-value {
+        color: var(--green);
+      }
+      .kpi-card.accent .kpi-value {
+        color: var(--accent);
+      }
+      /* Frozen state: pipeline stopped — values preserved as run summary, visually dimmed */
+      .kpi-card.kpi-frozen .kpi-value {
+        color: var(--text-muted) !important;
+        opacity: 0.75;
+      }
+      .kpi-card.kpi-frozen .kpi-label::after {
+        content: " · STOPPED";
+        font-size: 9px;
+        letter-spacing: 0.03em;
+      }
 
-  /* Chart grid */
-  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-  .chart-card {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-    padding: 16px;
-  }
-  .chart-card.full-width { grid-column: 1 / -1; }
-  .chart-title { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .chart-container { position: relative; }
+      /* KPI info icon + tooltip */
+      .kpi-label-row {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 6px;
+      }
+      .kpi-label-row .kpi-label {
+        margin-bottom: 0;
+      }
+      .kpi-info {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        cursor: default;
+      }
+      .kpi-info-icon {
+        width: 13px;
+        height: 13px;
+        border-radius: 50%;
+        background: var(--border);
+        color: var(--text-muted);
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 13px;
+        text-align: center;
+        user-select: none;
+        flex-shrink: 0;
+      }
+      .kpi-tooltip {
+        visibility: hidden;
+        opacity: 0;
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1c2128;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        font-size: 11px;
+        line-height: 1.5;
+        padding: 8px 10px;
+        width: 200px;
+        white-space: normal;
+        pointer-events: none;
+        z-index: 999;
+        transition: opacity 0.15s ease;
+      }
+      .kpi-tooltip::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 5px solid transparent;
+        border-top-color: var(--border);
+      }
+      .kpi-info:hover .kpi-tooltip {
+        visibility: visible;
+        opacity: 1;
+      }
 
-  /* Speedup table */
-  table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); }
-  td { padding: 8px 10px; border-bottom: 1px solid rgba(48,54,61,0.5); font-size: 13px; }
-  tr:last-child td { border-bottom: none; }
-  .speedup-badge {
-    display: inline-block; background: rgba(63,185,80,0.15); color: var(--green);
-    border: 1px solid rgba(63,185,80,0.3); border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: 700;
-  }
+      /* Chart grid */
+      .chart-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      /* Business tab: make category chart wider (2.5:1 ratio) and geo narrower */
+      #tab-business .chart-grid {
+        grid-template-columns: 2.5fr 1fr;
+      }
+      .chart-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+      }
+      .chart-card.full-width {
+        grid-column: 1 / -1;
+      }
+      .chart-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-muted);
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .chart-container {
+        position: relative;
+      }
 
-  /* Alerts table */
-  .alerts-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .alerts-table th { padding: 6px 8px; color: var(--text-muted); border-bottom: 1px solid var(--border); text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; }
-  .alerts-table td { padding: 5px 8px; border-bottom: 1px solid rgba(48,54,61,0.4); }
-  .risk-high { color: var(--red); font-weight: 700; }
-  .risk-med { color: var(--orange); }
+      /* Speedup table */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th {
+        text-align: left;
+        padding: 8px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        border-bottom: 1px solid var(--border);
+      }
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+        font-size: 13px;
+      }
+      tr:last-child td {
+        border-bottom: none;
+      }
+      .speedup-badge {
+        display: inline-block;
+        background: rgba(63, 185, 80, 0.15);
+        color: var(--green);
+        border: 1px solid rgba(63, 185, 80, 0.3);
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: 11px;
+        font-weight: 700;
+      }
 
-  /* Connection status */
-  #conn-status { font-size: 11px; color: var(--text-muted); }
-  #conn-status.connected { color: var(--green); }
-  #conn-status.disconnected { color: var(--red); }
+      /* Alerts table */
+      .alerts-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .alerts-table th {
+        padding: 6px 8px;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      .alerts-table td {
+        padding: 5px 8px;
+        border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+      }
+      .risk-high {
+        color: var(--red);
+        font-weight: 700;
+      }
+      .risk-med {
+        color: var(--orange);
+      }
 
-  @media (max-width: 640px) {
-    .chart-grid { grid-template-columns: 1fr; }
-  }
-</style>
-</head>
-<body>
+      .live-badge.connecting {
+        color: var(--text-muted);
+        background: rgba(139, 148, 158, 0.1);
+        border-color: rgba(139, 148, 158, 0.3);
+      }
+      .live-badge.connecting .live-dot {
+        background: var(--text-muted);
+        animation: none;
+      }
 
-<header>
-  <h1>Fraud Detection Demo v4 — GNN + XGBoost</h1>
-  <div class="live-badge"><div class="live-dot"></div>LIVE</div>
-  <span class="elapsed" id="elapsed">00:00:00 elapsed</span>
-  <span id="conn-status" class="disconnected">● Connecting...</span>
-  <div class="header-right">
-    <button class="btn-primary" id="start-btn" onclick="startPipeline()">▶ Start</button>
-    <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">■ Stop</button>
-    <button class="btn-secondary" id="reset-btn" onclick="resetPipeline()">↺ Reset</button>
-  </div>
-</header>
+      @media (max-width: 640px) {
+        .chart-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img
+        id="logo-customer"
+        alt=""
+        style="height: 32px; display: none; object-fit: contain"
+      />
+      <h1 id="page-title" style="margin-left: 12px">
+        Fraud Detection Demo v4 — GNN + XGBoost
+      </h1>
+      <div id="liveness-badge" class="live-badge connecting">
+        <div class="live-dot"></div>
+        <span id="liveness-text">Connecting...</span>
+      </div>
+      <span class="elapsed"
+        ><span id="elapsed">00:00:00</span> elapsed <span id="env-inline"></span
+      ></span>
+      <div class="header-right">
+        <img
+          id="logo-nvidia"
+          alt=""
+          style="
+            height: 46px;
+            margin-top: -15px;
+            display: none;
+            opacity: 0.85;
+            object-fit: contain;
+          "
+        />
+      </div>
+    </header>
 
-<div id="pod-modal-backdrop">
-  <div id="pod-modal">
-    <button id="pod-modal-close-x" onclick="hidePodModal()" title="Close">&times;</button>
-    <h2 id="pod-modal-title">Starting Pipeline...</h2>
-    <p class="pod-modal-sub" id="pod-modal-sub">Pods are scaling up — takes 20-60 s on first start</p>
-    <div id="pod-modal-chips"></div>
-    <div id="pod-modal-btn-row">
-      <button id="pod-modal-dismiss" onclick="hidePodModal()">All Ready — Dismiss</button>
-      <button id="pod-modal-cancel">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<div class="tabs">
-  <button class="tab-btn active" onclick="showTab('business', this)">Business</button>
-  <button class="tab-btn" onclick="showTab('infra', this)">Infrastructure</button>
-  <button class="tab-btn" onclick="showTab('model', this)" id="model-tab-btn">Model / SHAP</button>
-</div>
-
-<!-- ===== BUSINESS TAB ===== -->
-<div id="tab-business" class="tab-pane active">
-  <div class="kpi-row">
-    <div class="kpi-card highlight">
-      <div class="kpi-label">Fraud Exposure</div>
-      <div class="kpi-value" id="kpi-exposure">$0</div>
-      <div class="kpi-sub">estimated at risk</div>
-    </div>
-    <div class="kpi-card accent">
-      <div class="kpi-label">Transactions</div>
-      <div class="kpi-value" id="kpi-txns">0</div>
-      <div class="kpi-sub">processed this run</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Fraud Flagged</div>
-      <div class="kpi-value" id="kpi-flagged">0</div>
-      <div class="kpi-sub">detected by model</div>
-    </div>
-    <div class="kpi-card good">
-      <div class="kpi-label">Fraud Rate</div>
-      <div class="kpi-value" id="kpi-fraud-rate">0%</div>
-      <div class="kpi-sub">of transactions</div>
-    </div>
-  </div>
-
-  <div class="chart-grid">
-    <div class="chart-card full-width">
-      <div class="chart-title">Transaction Volume / sec</div>
-      <div class="chart-container" style="height:160px"><canvas id="tx-chart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Fraud by Category</div>
-      <div class="chart-container" style="height:220px"><canvas id="cat-chart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">Recent High-Risk Alerts (fraud_score &gt; 0.8)</div>
-      <table class="alerts-table">
-        <thead>
-          <tr><th>#</th><th>Merchant</th><th>Category</th><th>Amount</th><th>Fraud Score</th></tr>
-        </thead>
-        <tbody id="alerts-body">
-          <tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">Scoring not started — run pipeline after model-build</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ===== INFRASTRUCTURE TAB ===== -->
-<div id="tab-infra" class="tab-pane">
-  <div class="kpi-row">
-    <div class="kpi-card accent">
-      <div class="kpi-label">GPU n29-0 <span style="font-size:9px;color:var(--text-muted)">.44</span></div>
-      <div class="kpi-value" id="kpi-gpu-n29-0">0%</div>
-      <div class="kpi-sub" id="kpi-gpu-n29-0-mem">0% mem</div>
-    </div>
-    <div class="kpi-card accent">
-      <div class="kpi-label">GPU n29-1 <span style="font-size:9px;color:var(--text-muted)">.44</span></div>
-      <div class="kpi-value" id="kpi-gpu-n29-1">0%</div>
-      <div class="kpi-sub" id="kpi-gpu-n29-1-mem">0% mem</div>
-    </div>
-    <div class="kpi-card accent">
-      <div class="kpi-label">GPU n25-0 <span style="font-size:9px;color:var(--text-muted)">.40</span></div>
-      <div class="kpi-value" id="kpi-gpu-n25-0">0%</div>
-      <div class="kpi-sub" id="kpi-gpu-n25-0-mem">0% mem</div>
-    </div>
-    <div class="kpi-card accent">
-      <div class="kpi-label">GPU n25-1 <span style="font-size:9px;color:var(--text-muted)">.40</span></div>
-      <div class="kpi-value" id="kpi-gpu-n25-1">0%</div>
-      <div class="kpi-sub" id="kpi-gpu-n25-1-mem">0% mem</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">CPU .44</div>
-      <div class="kpi-value" id="kpi-cpu">0%</div>
-      <div class="kpi-sub">n29 utilization</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">CPU .40</div>
-      <div class="kpi-value" id="kpi-cpu-n25">0%</div>
-      <div class="kpi-sub">n25 utilization</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">RAM</div>
-      <div class="kpi-value" id="kpi-ram">0%</div>
-      <div class="kpi-sub" id="kpi-ram-sub">0 GB used</div>
-    </div>
-    <div class="kpi-card highlight">
-      <div class="kpi-label">Volume Processed</div>
-      <div class="kpi-value" id="kpi-vol">0</div>
-      <div class="kpi-sub" id="kpi-vol-sub">transactions</div>
-    </div>
-  </div>
-
-  <div class="chart-grid">
-    <!-- Chart 1: GPU / CPU Utilization -->
-    <div class="chart-card full-width">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div class="chart-title" style="margin:0">GPU Engine Active / CPU Utilization <span style="font-size:10px;color:var(--text-muted)">(1s DCGM profiling)</span></div>
-        <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,0)"><span style="color:#bc8cff">n29-0</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,1)"><span style="color:#9d6dd8">n29-1</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,2)"><span style="color:#f0883e">n25-0</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,3)"><span style="color:#d2691e">n25-1</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,4)"><span style="color:#58a6ff">CPU .44</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,5)"><span style="color:#39d353">CPU .40</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(utilChart,6)"><span style="color:#e3b341">FB ms</span></label>
+    <div id="pod-modal-backdrop">
+      <div id="pod-modal">
+        <button id="pod-modal-close-x" onclick="hidePodModal()" title="Close">
+          &times;
+        </button>
+        <h2 id="pod-modal-title">Starting Pipeline...</h2>
+        <p class="pod-modal-sub" id="pod-modal-sub">
+          Pods are scaling up — takes 20-60 s on first start
+        </p>
+        <div id="pod-modal-chips"></div>
+        <div id="pod-modal-btn-row">
+          <button id="pod-modal-dismiss" onclick="hidePodModal()">
+            All Ready — Dismiss
+          </button>
+          <button id="pod-modal-cancel">Cancel</button>
         </div>
       </div>
-      <div class="chart-container" style="height:220px"><canvas id="util-chart"></canvas></div>
     </div>
-    <!-- Chart 2: Processing Throughput & Latency -->
-    <div class="chart-card full-width">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div class="chart-title" style="margin:0">Processing Throughput &amp; Latency</div>
-        <div style="display:flex;gap:12px;font-size:11px;flex-wrap:wrap">
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(tputLatChart,0)"><span style="color:#3fb950">Rows/s</span></label>
-          <label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" checked onchange="toggleChartLine(tputLatChart,1)"><span style="color:#e3b341">FB ms</span></label>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="showTab('business', this)">
+        Business
+      </button>
+      <button class="tab-btn" onclick="showTab('infra', this)">Tech</button>
+      <button
+        class="tab-btn"
+        onclick="showTab('model', this)"
+        id="model-tab-btn"
+      >
+        Model / SHAP
+      </button>
+      <div class="tab-controls">
+        <button class="btn-primary" id="start-btn" onclick="startPipeline()">
+          ▶ Start
+        </button>
+        <button class="btn-secondary" id="stop-btn" onclick="stopPipeline()">
+          ■ Stop
+        </button>
+        <button class="btn-secondary" id="reset-btn" onclick="resetPipeline()">
+          ↺ Reset
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== BUSINESS TAB ===== -->
+    <div id="tab-business" class="tab-pane active">
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Total $ Processed</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-total-amt"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-total-amt">$0</div>
+          <div class="kpi-sub">transaction volume</div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Fraud Exposure</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-exposure"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-exposure">$0</div>
+          <div class="kpi-sub">estimated at risk</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Fraud Flagged</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-flagged"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-flagged">0</div>
+          <div class="kpi-sub">detected by model</div>
+        </div>
+        <div class="kpi-card good">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Fraud Rate</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-fraud-rate"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-fraud-rate">0%</div>
+          <div class="kpi-sub">of transactions</div>
+        </div>
+        <div class="kpi-card accent">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Transactions</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-txns"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-txns">0</div>
+          <div class="kpi-sub">processed this run</div>
+        </div>
+        <div class="kpi-card accent">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Decision Latency</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-decision-latency"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-decision-latency">—</div>
+          <div class="kpi-sub">time to process a transaction</div>
         </div>
       </div>
-      <div class="chart-container" style="height:180px"><canvas id="tput-lat-chart"></canvas></div>
-    </div>
-  </div>
 
-  <!-- Pipeline Stats (bottom of infra tab) -->
-  <div class="chart-card">
-    <div class="chart-title">Pipeline Stats</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;font-size:12px">
-      <div>
-        <div style="color:#bc8cff;font-weight:600;margin-bottom:4px">Raw Queue</div>
-        <div id="q-raw" style="color:var(--text-muted)">—</div>
-      </div>
-      <div>
-        <div style="color:#3fb950;font-weight:600;margin-bottom:4px">Features Queue</div>
-        <div id="q-feat" style="color:var(--text-muted)">—</div>
-      </div>
-      <div>
-        <div style="color:#e3b341;font-weight:600;margin-bottom:4px">Volume</div>
-        <div id="q-vol" style="color:var(--text-muted)">—</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ===== MODEL / SHAP TAB ===== -->
-<div id="tab-model" class="tab-pane">
-  <div class="kpi-row" id="model-kpis">
-    <div class="kpi-card good">
-      <div class="kpi-label">F1 Score</div>
-      <div class="kpi-value" id="kpi-f1">—</div>
-      <div class="kpi-sub">GPU model</div>
-    </div>
-    <div class="kpi-card accent">
-      <div class="kpi-label">AUC-PR</div>
-      <div class="kpi-value" id="kpi-auc-pr">—</div>
-      <div class="kpi-sub">area under PR curve</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Precision</div>
-      <div class="kpi-value" id="kpi-prec">—</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">Recall</div>
-      <div class="kpi-value" id="kpi-recall">—</div>
-    </div>
-  </div>
-
-  <!-- GNN Pipeline Flow -->
-  <div class="chart-card" style="margin-bottom:16px">
-    <div class="chart-title">GNN + XGBoost Pipeline Flow</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
-      <div style="background:#21262d;border:1px solid #bc8cff;border-radius:6px;padding:6px 10px;color:#bc8cff;font-weight:600">PREP</div>
-      <div style="color:var(--text-muted)">→ NFS →</div>
-      <div style="background:#21262d;border:1px solid #3fb950;border-radius:6px;padding:6px 10px;color:#3fb950;font-weight:600">GraphSAGE</div>
-      <div style="color:var(--text-muted)">→</div>
-      <div style="background:#21262d;border:1px solid #3fb950;border-radius:6px;padding:6px 10px;color:#3fb950;font-weight:600">XGBoost</div>
-      <div style="color:var(--text-muted)">→</div>
-      <div style="background:#21262d;border:1px solid #e3b341;border-radius:6px;padding:6px 10px;color:#e3b341;font-weight:600">TRITON</div>
-      <div style="color:var(--text-muted)">→ NFS →</div>
-      <div style="background:#21262d;border:1px solid #f85149;border-radius:6px;padding:6px 10px;color:#f85149;font-weight:600">SCORES</div>
-      <div style="margin-left:auto;font-size:11px;color:var(--text-muted)" id="flow-stats"></div>
-    </div>
-  </div>
-
-  <div class="chart-grid">
-    <div class="chart-card">
-      <div class="chart-title">SHAP Feature Importance (mean |SHAP|)</div>
-      <div class="chart-container" style="height:280px"><canvas id="shap-chart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">High-Risk Score Distribution (scores &gt; 0.8)</div>
-      <div class="chart-container" style="height:280px"><canvas id="fraud-hist-chart"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <div class="chart-title">GNN Architecture</div>
-      <div style="padding:8px;font-size:12px;color:var(--text-muted);line-height:1.6">
-        <div><strong style="color:var(--text)">GraphSAGE</strong> — Tri-partite graph</div>
-        <div style="margin:4px 0">User <-> Transaction <-> Merchant</div>
-        <div>2-layer SAGEConv: <span style="color:#bc8cff">35 → 64 → 32</span> dims</div>
-        <div style="margin-top:8px"><strong style="color:var(--text)">XGBoost</strong></div>
-        <div>Input: <span style="color:#3fb950">35 tabular + 32 GNN = 67 features</span></div>
-        <div style="margin-top:4px" id="gnn-model-stats">—</div>
+      <div class="chart-grid">
+        <div class="chart-card full-width">
+          <div class="chart-title">Transaction Volume / sec</div>
+          <div class="chart-container" style="height: 160px">
+            <canvas id="tx-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Fraud by Category</div>
+          <div class="chart-container" style="height: 220px">
+            <canvas id="cat-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Fraud by Geography (State)</div>
+          <table class="alerts-table">
+            <thead>
+              <tr>
+                <th>State</th>
+                <th>Fraud Amount at Risk</th>
+              </tr>
+            </thead>
+            <tbody id="geo-body">
+              <tr>
+                <td
+                  colspan="2"
+                  style="
+                    color: var(--text-muted);
+                    text-align: center;
+                    padding: 20px;
+                  "
+                >
+                  No scored data yet
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="chart-card full-width">
+          <div class="chart-title">
+            Recent High-Risk Alerts (fraud_score &gt; 0.8)
+          </div>
+          <table class="alerts-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Merchant</th>
+                <th>Category</th>
+                <th>Amount</th>
+                <th>Fraud Score</th>
+              </tr>
+            </thead>
+            <tbody id="alerts-body">
+              <tr>
+                <td
+                  colspan="5"
+                  style="
+                    color: var(--text-muted);
+                    text-align: center;
+                    padding: 20px;
+                  "
+                >
+                  Scoring not started — run pipeline after model-build
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div style="margin-top:8px;color:var(--text-muted);font-size:12px" id="shap-status">
-    SHAP data loads automatically after model-build completes.
-  </div>
-</div>
+    <!-- ===== INFRASTRUCTURE TAB ===== -->
+    <div id="tab-infra" class="tab-pane">
+      <div class="kpi-row">
+        <div class="kpi-card accent">
+          <div class="kpi-label-row">
+            <div class="kpi-label">
+              Scoring
+              <span style="font-size: 9px; color: var(--text-muted)"
+                >n29-0 .44</span
+              >
+            </div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-gpu-scoring"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-gpu-n29-0">0%</div>
+          <div class="kpi-sub" id="kpi-gpu-n29-0-mem">
+            <span
+              id="kpi-gpu-n29-0-mem-val"
+              style="font-size: 14px; color: var(--accent)"
+              >0%</span
+            ><span id="kpi-gpu-n29-0-mem-label"> mem</span>
+          </div>
+        </div>
+        <div class="kpi-card accent">
+          <div class="kpi-label-row">
+            <div class="kpi-label">
+              Inference
+              <span style="font-size: 9px; color: var(--text-muted)"
+                >n29-1 .44</span
+              >
+            </div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-gpu-triton"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-gpu-n29-1">0%</div>
+          <div class="kpi-sub" id="kpi-gpu-n29-1-mem">
+            <span
+              id="kpi-gpu-n29-1-mem-val"
+              style="font-size: 14px; color: var(--accent)"
+              >0%</span
+            ><span id="kpi-gpu-n29-1-mem-label"> mem</span>
+          </div>
+        </div>
+        <div class="kpi-card accent">
+          <div class="kpi-label-row">
+            <div class="kpi-label">
+              Prep
+              <span style="font-size: 9px; color: var(--text-muted)"
+                >n25-0 .40</span
+              >
+            </div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-gpu-prep"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-gpu-n25-0">0%</div>
+          <div class="kpi-sub" id="kpi-gpu-n25-0-mem">
+            <span
+              id="kpi-gpu-n25-0-mem-val"
+              style="font-size: 14px; color: var(--accent)"
+              >0%</span
+            ><span id="kpi-gpu-n25-0-mem-label"> mem</span>
+          </div>
+        </div>
+        <div class="kpi-card accent">
+          <div class="kpi-label-row">
+            <div class="kpi-label">
+              Training
+              <span style="font-size: 9px; color: var(--text-muted)"
+                >n25-1 .40</span
+              >
+            </div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-gpu-training"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-gpu-n25-1">0%</div>
+          <div class="kpi-sub" id="kpi-gpu-n25-1-mem">
+            <span
+              id="kpi-gpu-n25-1-mem-val"
+              style="font-size: 14px; color: var(--accent)"
+              >0%</span
+            ><span id="kpi-gpu-n25-1-mem-label"> mem</span>
+          </div>
+        </div>
+        <div class="kpi-card highlight">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Volume Processed</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-vol"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-vol">0</div>
+          <div class="kpi-sub" id="kpi-vol-sub">transactions</div>
+        </div>
+      </div>
 
-<script>
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-let ws = null;
-let wsConnected = false;
-let shapLoaded = false;
-let modelTabOpened = false;
-const MAX_HISTORY = 300;  // 60 seconds at 200ms intervals
+      <div class="chart-grid">
+        <!-- Chart 1: GPU / CPU Utilization -->
+        <div class="chart-card full-width">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 10px;
+            "
+          >
+            <div class="chart-title" style="margin: 0">
+              GPU Engine Active
+              <span style="font-size: 10px; color: var(--text-muted)"
+                >(1s DCGM profiling)</span
+              >
+            </div>
+            <div
+              style="display: flex; gap: 12px; font-size: 11px; flex-wrap: wrap"
+            >
+              <label
+                style="
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                "
+                ><input
+                  type="checkbox"
+                  checked
+                  onchange="toggleChartLine(utilChart, 0)"
+                /><span style="color: #bc8cff">Scoring</span></label
+              >
+              <label
+                style="
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                "
+                ><input
+                  type="checkbox"
+                  checked
+                  onchange="toggleChartLine(utilChart, 1)"
+                /><span style="color: #58a6ff">Inference</span></label
+              >
+              <label
+                style="
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                "
+                ><input
+                  type="checkbox"
+                  checked
+                  onchange="toggleChartLine(utilChart, 2)"
+                /><span style="color: #f0883e">Prep</span></label
+              >
+              <label
+                style="
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                "
+                ><input
+                  type="checkbox"
+                  checked
+                  onchange="toggleChartLine(utilChart, 3)"
+                /><span style="color: #3fb950">Training</span></label
+              >
+              <label
+                style="
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                "
+                ><input
+                  type="checkbox"
+                  checked
+                  onchange="toggleChartLine(utilChart, 4)"
+                /><span style="color: #e3b341">FB ms</span></label
+              >
+            </div>
+          </div>
+          <div class="chart-container" style="height: 220px">
+            <canvas id="util-chart"></canvas>
+          </div>
+        </div>
+        <!-- Chart 2: Processing Throughput & Latency -->
+        <div class="chart-card full-width">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 10px;
+            "
+          >
+            <div class="chart-title" style="margin: 0">
+              Processing Throughput &amp; Latency
+            </div>
+            <div
+              style="display: flex; gap: 12px; font-size: 11px; flex-wrap: wrap"
+            >
+              <label
+                style="
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                "
+                ><input
+                  type="checkbox"
+                  checked
+                  onchange="toggleChartLine(tputLatChart, 0)"
+                /><span style="color: #3fb950">Rows/s</span></label
+              >
+              <label
+                style="
+                  cursor: pointer;
+                  display: flex;
+                  align-items: center;
+                  gap: 4px;
+                "
+                ><input
+                  type="checkbox"
+                  checked
+                  onchange="toggleChartLine(tputLatChart, 1)"
+                /><span style="color: #e3b341">FB ms</span></label
+              >
+            </div>
+          </div>
+          <div class="chart-container" style="height: 180px">
+            <canvas id="tput-lat-chart"></canvas>
+          </div>
+        </div>
+      </div>
 
-// Time-series history buffers
-const history = {
-  gpu_n29_0: [], gpu_n29_1: [], gpu_n25_0: [], gpu_n25_1: [],
-  cpu_n29: [], cpu_n25: [],
-  tx: [], fbLatency: [], labels: []
-};
+      <!-- Pipeline Stats (bottom of infra tab) -->
+      <div class="chart-card">
+        <div class="chart-title">Pipeline Stats</div>
+        <div
+          style="
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 14px;
+            font-size: 12px;
+          "
+        >
+          <div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                color: #bc8cff;
+                font-weight: 600;
+                margin-bottom: 4px;
+              "
+            >
+              Raw Queue
+              <div class="kpi-info">
+                <div class="kpi-info-icon">i</div>
+                <div class="kpi-tooltip" id="tooltip-q-raw"></div>
+              </div>
+            </div>
+            <div id="q-raw" style="color: var(--text-muted)">—</div>
+          </div>
+          <div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                color: #3fb950;
+                font-weight: 600;
+                margin-bottom: 4px;
+              "
+            >
+              Features Queue
+              <div class="kpi-info">
+                <div class="kpi-info-icon">i</div>
+                <div class="kpi-tooltip" id="tooltip-q-feat"></div>
+              </div>
+            </div>
+            <div id="q-feat" style="color: var(--text-muted)">—</div>
+          </div>
+          <div>
+            <div
+              style="
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                color: #e3b341;
+                font-weight: 600;
+                margin-bottom: 4px;
+              "
+            >
+              Volume
+              <div class="kpi-info">
+                <div class="kpi-info-icon">i</div>
+                <div class="kpi-tooltip" id="tooltip-q-vol"></div>
+              </div>
+            </div>
+            <div id="q-vol" style="color: var(--text-muted)">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-// ---------------------------------------------------------------------------
-// Charts
-// ---------------------------------------------------------------------------
-const chartDefaults = {
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: { duration: 0 },
-  plugins: { legend: { display: false } },
-  scales: {
-    x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(48,54,61,0.5)' } },
-    y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(48,54,61,0.5)' } }
-  }
-};
+    <!-- ===== MODEL / SHAP TAB ===== -->
+    <div id="tab-model" class="tab-pane">
+      <div class="kpi-row" id="model-kpis">
+        <div class="kpi-card good">
+          <div class="kpi-label-row">
+            <div class="kpi-label">F1 Score</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-f1"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-f1">—</div>
+          <div class="kpi-sub">Overall Model Reliability</div>
+        </div>
+        <div class="kpi-card accent">
+          <div class="kpi-label-row">
+            <div class="kpi-label">AUC-PR</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-auc-pr"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-auc-pr">—</div>
+          <div class="kpi-sub">Model Quality Score</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Precision</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-prec"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-prec">—</div>
+          <div class="kpi-sub">How often a "fraud" alert is actually fraud</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label-row">
+            <div class="kpi-label">Recall</div>
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-kpi-recall"></div>
+            </div>
+          </div>
+          <div class="kpi-value" id="kpi-recall">—</div>
+          <div class="kpi-sub">% of actual fraud we successfully flagged</div>
+        </div>
+      </div>
 
-function makeLineChart(id, label, color, min = 0, max = 100) {
-  const ctx = document.getElementById(id);
-  if (!ctx) return null;
-  return new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [{ label, data: [], borderColor: color, backgroundColor: color + '22',
-        borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }]
-    },
-    options: { ...chartDefaults, scales: { ...chartDefaults.scales,
-      x: { ...chartDefaults.scales.x, display: false },
-      y: { ...chartDefaults.scales.y, min, max, suggestedMax: max }
-    }}
-  });
-}
+      <!-- GNN Pipeline Flow -->
+      <div class="chart-card" style="margin-bottom: 16px">
+        <div class="chart-title">GNN + XGBoost Pipeline Flow</div>
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            flex-wrap: wrap;
+          "
+        >
+          <div
+            style="
+              background: #21262d;
+              border: 1px solid #bc8cff;
+              border-radius: 6px;
+              padding: 6px 10px;
+              color: #bc8cff;
+              font-weight: 600;
+            "
+          >
+            PREP
+          </div>
+          <div style="color: var(--text-muted)">→ NFS →</div>
+          <div
+            style="
+              background: #21262d;
+              border: 1px solid #3fb950;
+              border-radius: 6px;
+              padding: 6px 10px;
+              color: #3fb950;
+              font-weight: 600;
+            "
+          >
+            GraphSAGE
+          </div>
+          <div style="color: var(--text-muted)">→</div>
+          <div
+            style="
+              background: #21262d;
+              border: 1px solid #3fb950;
+              border-radius: 6px;
+              padding: 6px 10px;
+              color: #3fb950;
+              font-weight: 600;
+            "
+          >
+            XGBoost
+          </div>
+          <div style="color: var(--text-muted)">→</div>
+          <div
+            style="
+              background: #21262d;
+              border: 1px solid #e3b341;
+              border-radius: 6px;
+              padding: 6px 10px;
+              color: #e3b341;
+              font-weight: 600;
+            "
+          >
+            TRITON
+          </div>
+          <div style="color: var(--text-muted)">→ NFS →</div>
+          <div
+            style="
+              background: #21262d;
+              border: 1px solid #f85149;
+              border-radius: 6px;
+              padding: 6px 10px;
+              color: #f85149;
+              font-weight: 600;
+            "
+          >
+            SCORES
+          </div>
+          <div
+            style="margin-left: auto; font-size: 11px; color: var(--text-muted)"
+            id="flow-stats"
+          ></div>
+        </div>
+      </div>
 
-function makeBarChart(id, labels, data, color, horizontal = false) {
-  const ctx = document.getElementById(id);
-  if (!ctx) return null;
-  return new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [{ data, backgroundColor: color + 'cc', borderRadius: 4 }]
-    },
-    options: {
-      ...chartDefaults,
-      indexAxis: horizontal ? 'y' : 'x',
-      scales: {
-        x: { ...chartDefaults.scales.x, ticks: { color: '#8b949e', font: { size: 10 } } },
-        y: { ...chartDefaults.scales.y, ticks: { color: '#8b949e', font: { size: 10 } } }
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div
+            class="chart-title"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              font-weight: 400;
+              text-transform: none;
+              letter-spacing: normal;
+            "
+          >
+            SHAP Feature Importance (mean |SHAP|)
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-shap"></div>
+            </div>
+          </div>
+          <div class="chart-container" style="height: 280px">
+            <canvas id="shap-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div
+            class="chart-title"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              font-weight: 400;
+              text-transform: none;
+              letter-spacing: normal;
+            "
+          >
+            High-Risk Score Distribution (scores &gt; 0.8)
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-score-dist"></div>
+            </div>
+          </div>
+          <div class="chart-container" style="height: 280px">
+            <canvas id="fraud-hist-chart"></canvas>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div
+            class="chart-title"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              font-weight: 400;
+              text-transform: none;
+              letter-spacing: normal;
+            "
+          >
+            GNN Architecture
+            <div class="kpi-info">
+              <div class="kpi-info-icon">i</div>
+              <div class="kpi-tooltip" id="tooltip-gnn-arch"></div>
+            </div>
+          </div>
+          <div
+            style="
+              padding: 8px;
+              font-size: 12px;
+              color: var(--text-muted);
+              line-height: 1.6;
+            "
+          >
+            <div>
+              <strong style="color: var(--text)">GraphSAGE</strong> —
+              Tri-partite graph
+            </div>
+            <div style="margin: 4px 0">User <-> Transaction <-> Merchant</div>
+            <div>
+              2-layer SAGEConv:
+              <span style="color: #bc8cff">35 → 64 → 32</span> dims
+            </div>
+            <div style="margin-top: 8px">
+              <strong style="color: var(--text)">XGBoost</strong>
+            </div>
+            <div>
+              Input:
+              <span style="color: #3fb950"
+                >35 tabular + 32 GNN = 67 features</span
+              >
+            </div>
+            <div style="margin-top: 4px" id="gnn-model-stats">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        style="margin-top: 8px; color: var(--text-muted); font-size: 12px"
+        id="shap-status"
+      >
+        SHAP data loads automatically after model-build completes.
+      </div>
+    </div>
+
+    <script>
+      // ---------------------------------------------------------------------------
+      // State
+      // ---------------------------------------------------------------------------
+      let ws = null;
+      let wsConnected = false;
+      let shapLoaded = false;
+      let modelTabOpened = false;
+      let _prevIsRunning = null;
+      const MAX_HISTORY = 300; // 60 seconds at 200ms intervals
+
+      // Time-series history buffers
+      const history = {
+        gpu_scoring: [],
+        gpu_triton: [],
+        gpu_prep: [],
+        gpu_training: [],
+        tx: [],
+        fbLatency: [],
+        labels: [],
+      };
+
+      // ---------------------------------------------------------------------------
+      // Charts
+      // ---------------------------------------------------------------------------
+      const chartDefaults = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 0 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            ticks: { color: "#8b949e", font: { size: 10 } },
+            grid: { color: "rgba(48,54,61,0.5)" },
+          },
+          y: {
+            ticks: { color: "#8b949e", font: { size: 10 } },
+            grid: { color: "rgba(48,54,61,0.5)" },
+          },
+        },
+      };
+
+      function makeLineChart(id, label, color, min = 0, max = 100) {
+        const ctx = document.getElementById(id);
+        if (!ctx) return null;
+        return new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label,
+                data: [],
+                borderColor: color,
+                backgroundColor: color + "22",
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+              },
+            ],
+          },
+          options: {
+            ...chartDefaults,
+            scales: {
+              ...chartDefaults.scales,
+              x: { ...chartDefaults.scales.x, display: false },
+              y: { ...chartDefaults.scales.y, min, max, suggestedMax: max },
+            },
+          },
+        });
       }
-    }
-  });
-}
 
-let catChart = null;
-let shapChart = null;
-let utilChart = null;
-let tputLatChart = null;
-let txChart = null;
-let wsReconnectDelay = 2000;
-
-function makeUtilChart() {
-  const ctx = document.getElementById('util-chart');
-  if (!ctx) return null;
-  return new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label: 'GPU n29-0', data: [], borderColor: '#bc8cff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'GPU n29-1', data: [], borderColor: '#9d6dd8', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'GPU n25-0', data: [], borderColor: '#f0883e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'GPU n25-1', data: [], borderColor: '#d2691e', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'CPU .44',   data: [], borderColor: '#58a6ff', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'CPU .40',   data: [], borderColor: '#39d353', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'FB ms',     data: [], borderColor: '#e3b341', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, borderDash: [4,2], yAxisID: 'yFb' },
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
-      plugins: { legend: { display: false } },
-      scales: {
-        x:   { display: false },
-        y:   { position: 'left',  min: 0, max: 100, ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(48,54,61,0.3)' }, title: { display: true, text: '%', color: '#8b949e', font: { size: 10 } } },
-        yFb: { position: 'right', min: 0, suggestedMax: 10, ticks: { color: '#e3b341', font: { size: 10 }, callback: v => v.toFixed(1)+'ms' }, grid: { display: false }, title: { display: true, text: 'FB ms', color: '#e3b341', font: { size: 10 } } },
+      function makeBarChart(id, labels, data, color, horizontal = false) {
+        const ctx = document.getElementById(id);
+        if (!ctx) return null;
+        return new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels,
+            datasets: [
+              { data, backgroundColor: color + "cc", borderRadius: 4 },
+            ],
+          },
+          options: {
+            ...chartDefaults,
+            indexAxis: horizontal ? "y" : "x",
+            scales: {
+              x: {
+                ...chartDefaults.scales.x,
+                ticks: { color: "#8b949e", font: { size: 10 } },
+              },
+              y: {
+                ...chartDefaults.scales.y,
+                ticks: { color: "#8b949e", font: { size: 10 } },
+              },
+            },
+          },
+        });
       }
-    }
-  });
-}
 
-function makeTputLatChart() {
-  const ctx = document.getElementById('tput-lat-chart');
-  if (!ctx) return null;
-  return new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label: 'Rows/s',  data: [], borderColor: '#3fb950', backgroundColor: '#3fb95022', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
-        { label: 'FB ms', data: [], borderColor: '#e3b341', backgroundColor: 'transparent', borderWidth: 2, tension: 0.3, pointRadius: 0, borderDash: [4,2], yAxisID: 'yFb' },
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false, animation: { duration: 0 },
-      plugins: { legend: { display: false } },
-      scales: {
-        x:   { display: false },
-        y:   { position: 'left', min: 0, suggestedMax: 50000, ticks: { color: '#3fb950', font: { size: 10 }, callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? Math.round(v/1000).toLocaleString()+'K' : v }, grid: { color: 'rgba(48,54,61,0.3)' }, title: { display: true, text: 'rows/s', color: '#3fb950', font: { size: 10 } } },
-        yFb: { position: 'right', min: 0, suggestedMax: 10, ticks: { color: '#e3b341', font: { size: 10 }, callback: v => v.toFixed(1)+'ms' }, grid: { display: false }, title: { display: true, text: 'FB ms', color: '#e3b341', font: { size: 10 } } },
+      let catChart = null;
+      let shapChart = null;
+      let utilChart = null;
+      let tputLatChart = null;
+      let txChart = null;
+      let wsReconnectDelay = 2000;
+      let _elapsedSec = 0;
+      let _elapsedRunning = false;
+      setInterval(() => {
+        if (_elapsedRunning) {
+          _elapsedSec++;
+          const h = String(Math.floor(_elapsedSec / 3600)).padStart(2, "0");
+          const m = String(Math.floor((_elapsedSec % 3600) / 60)).padStart(
+            2,
+            "0",
+          );
+          const s = String(_elapsedSec % 60).padStart(2, "0");
+          document.getElementById("elapsed").textContent = `${h}:${m}:${s}`;
+        }
+      }, 1000);
+
+      function makeUtilChart() {
+        const ctx = document.getElementById("util-chart");
+        if (!ctx) return null;
+        return new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: "Scoring",
+                data: [],
+                borderColor: "#bc8cff",
+                backgroundColor: "transparent",
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 0,
+                yAxisID: "y",
+              },
+              {
+                label: "Inference",
+                data: [],
+                borderColor: "#58a6ff",
+                backgroundColor: "transparent",
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 0,
+                yAxisID: "y",
+              },
+              {
+                label: "Prep",
+                data: [],
+                borderColor: "#f0883e",
+                backgroundColor: "transparent",
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 0,
+                yAxisID: "y",
+              },
+              {
+                label: "Training",
+                data: [],
+                borderColor: "#3fb950",
+                backgroundColor: "transparent",
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 0,
+                yAxisID: "y",
+              },
+              {
+                label: "FB ms",
+                data: [],
+                borderColor: "#e3b341",
+                backgroundColor: "transparent",
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 0,
+                borderDash: [4, 2],
+                yAxisID: "yFb",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { display: false },
+              y: {
+                position: "left",
+                min: 0,
+                max: 100,
+                ticks: { color: "#8b949e", font: { size: 10 } },
+                grid: { color: "rgba(48,54,61,0.3)" },
+                title: {
+                  display: true,
+                  text: "%",
+                  color: "#8b949e",
+                  font: { size: 10 },
+                },
+              },
+              yFb: {
+                position: "right",
+                min: 0,
+                suggestedMax: 10,
+                ticks: {
+                  color: "#e3b341",
+                  font: { size: 10 },
+                  callback: (v) => v.toFixed(1) + "ms",
+                },
+                grid: { display: false },
+                title: {
+                  display: true,
+                  text: "FB ms",
+                  color: "#e3b341",
+                  font: { size: 10 },
+                },
+              },
+            },
+          },
+        });
       }
-    }
-  });
-}
 
-function toggleChartLine(chart, idx) {
-  if (!chart) return;
-  chart.data.datasets[idx].hidden = !chart.data.datasets[idx].hidden;
-  chart.update('none');
-}
+      function makeTputLatChart() {
+        const ctx = document.getElementById("tput-lat-chart");
+        if (!ctx) return null;
+        return new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: [],
+            datasets: [
+              {
+                label: "Rows/s",
+                data: [],
+                borderColor: "#3fb950",
+                backgroundColor: "#3fb95022",
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+                yAxisID: "y",
+              },
+              {
+                label: "FB ms",
+                data: [],
+                borderColor: "#e3b341",
+                backgroundColor: "transparent",
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 0,
+                borderDash: [4, 2],
+                yAxisID: "yFb",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { display: false },
+              y: {
+                position: "left",
+                min: 0,
+                suggestedMax: 50000,
+                ticks: {
+                  color: "#3fb950",
+                  font: { size: 10 },
+                  callback: (v) => numeral(v).format("0.[0]a").toUpperCase(),
+                },
+                grid: { color: "rgba(48,54,61,0.3)" },
+                title: {
+                  display: true,
+                  text: "rows/s",
+                  color: "#3fb950",
+                  font: { size: 10 },
+                },
+              },
+              yFb: {
+                position: "right",
+                min: 0,
+                suggestedMax: 10,
+                ticks: {
+                  color: "#e3b341",
+                  font: { size: 10 },
+                  callback: (v) => v.toFixed(1) + "ms",
+                },
+                grid: { display: false },
+                title: {
+                  display: true,
+                  text: "FB ms",
+                  color: "#e3b341",
+                  font: { size: 10 },
+                },
+              },
+            },
+          },
+        });
+      }
 
-// Initialise charts
-const ALL_CATS = ['misc_net','grocery_pos','entertainment','gas_transport','misc_pos',
-  'grocery_net','shopping_net','shopping_pos','food_dining','personal_care',
-  'health_fitness','travel','kids_pets','home'];
-catChart = makeBarChart('cat-chart', ALL_CATS.map(c => c.replace('_', ' ')), new Array(14).fill(0), '#e3b341', true);
-utilChart = makeUtilChart();
-tputLatChart = makeTputLatChart();
-txChart = makeLineChart('tx-chart', 'Rows/s', '#3fb950', 0, null);
+      function toggleChartLine(chart, idx) {
+        if (!chart) return;
+        chart.data.datasets[idx].hidden = !chart.data.datasets[idx].hidden;
+        chart.update("none");
+      }
 
-// ---------------------------------------------------------------------------
-// WebSocket
-// ---------------------------------------------------------------------------
-function connectWS() {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${proto}//${location.host}/ws/dashboard`);
+      // Initialise charts
+      const ALL_CATS = [
+        "misc_net",
+        "grocery_pos",
+        "entertainment",
+        "gas_transport",
+        "misc_pos",
+        "grocery_net",
+        "shopping_net",
+        "shopping_pos",
+        "food_dining",
+        "personal_care",
+        "health_fitness",
+        "travel",
+        "kids_pets",
+        "home",
+      ];
+      catChart = makeBarChart(
+        "cat-chart",
+        ALL_CATS.map((c) => c.replace("_", " ")),
+        new Array(14).fill(0),
+        "#e3b341",
+        true,
+      );
+      utilChart = makeUtilChart();
+      tputLatChart = makeTputLatChart();
+      txChart = makeLineChart("tx-chart", "Rows/s", "#3fb950", 0, null);
 
-  ws.onopen = () => {
-    wsConnected = true;
-    wsReconnectDelay = 2000;
-    document.getElementById('conn-status').textContent = '● Connected';
-    document.getElementById('conn-status').className = 'connected';
-  };
+      // ---------------------------------------------------------------------------
+      // WebSocket
+      // ---------------------------------------------------------------------------
+      function connectWS() {
+        const proto = location.protocol === "https:" ? "wss:" : "ws:";
+        ws = new WebSocket(`${proto}//${location.host}/ws/dashboard`);
 
-  ws.onmessage = (event) => {
-    try { updateDashboard(JSON.parse(event.data)); } catch (e) { console.warn('Parse error', e); }
-  };
+        ws.onopen = () => {
+          wsConnected = true;
+          wsReconnectDelay = 2000;
+        };
 
-  ws.onclose = () => {
-    wsConnected = false;
-    document.getElementById('conn-status').textContent = '● Disconnected';
-    document.getElementById('conn-status').className = 'disconnected';
-    setTimeout(connectWS, wsReconnectDelay);
-    wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
-  };
+        ws.onmessage = (event) => {
+          try {
+            updateDashboard(JSON.parse(event.data));
+          } catch (e) {
+            console.warn("Parse error", e);
+          }
+        };
 
-  ws.onerror = () => ws.close();
-}
+        ws.onclose = () => {
+          wsConnected = false;
+          const b = document.getElementById("liveness-badge");
+          const t = document.getElementById("liveness-text");
+          if (b && t) {
+            b.className = "live-badge error";
+            t.textContent = "Disconnected";
+          }
+          setTimeout(connectWS, wsReconnectDelay);
+          wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+        };
 
-// ---------------------------------------------------------------------------
-// Dashboard update
-// ---------------------------------------------------------------------------
-function updateDashboard(data) {
-  // Sync Start / Stop button states from server state
-  const isRunning = !!data.is_running;
-  const startBtn  = document.getElementById('start-btn');
-  if (!startBtn.textContent.startsWith('…')) {
-    startBtn.textContent = isRunning ? '▶ Running' : '▶ Start';
-    startBtn.className   = isRunning ? 'btn-secondary' : 'btn-primary';
-  }
-  startBtn.disabled = isRunning;
-  document.getElementById('stop-btn').disabled = !isRunning;
-  if (!isRunning) stopPodPolling();
+        ws.onerror = () => ws.close();
+      }
 
-  // LIVE badge visibility
-  const liveBadge = document.querySelector('.live-badge');
-  if (liveBadge) {
-    liveBadge.style.display = isRunning ? 'flex' : 'none';
-  }
+      // ---------------------------------------------------------------------------
+      // Dashboard update
+      // ---------------------------------------------------------------------------
+      function updateDashboard(data) {
+        // Sync Start / Stop button states from server state
+        const isRunning = !!data.is_running;
+        const startBtn = document.getElementById("start-btn");
+        if (!startBtn.textContent.startsWith("…")) {
+          startBtn.textContent = isRunning ? "▶ Running" : "▶ Start";
+          startBtn.className = isRunning ? "btn-secondary" : "btn-primary";
+        }
+        startBtn.disabled = isRunning;
+        document.getElementById("stop-btn").disabled = !isRunning;
+        if (!isRunning) stopPodPolling();
 
-  // Elapsed
-  const e = data.elapsed_sec || 0;
-  const h = String(Math.floor(e / 3600)).padStart(2, '0');
-  const m = String(Math.floor((e % 3600) / 60)).padStart(2, '0');
-  const s = String(e % 60).padStart(2, '0');
-  document.getElementById('elapsed').textContent = `${h}:${m}:${s} elapsed`;
+        // On running→stopped transition: immediately zero GPU KPI tiles, clear GPU chart history (M-02),
+        // and clear Transaction Volume chart (M-03) so all metrics drop to 0 at once
+        if (_prevIsRunning === true && !isRunning) {
+          [
+            "kpi-gpu-n29-0",
+            "kpi-gpu-n29-1",
+            "kpi-gpu-n25-0",
+            "kpi-gpu-n25-1",
+          ].forEach((id) => {
+            document.getElementById(id).textContent = "0.0%";
+          });
+          [
+            "kpi-gpu-n29-0-mem",
+            "kpi-gpu-n29-1-mem",
+            "kpi-gpu-n25-0-mem",
+            "kpi-gpu-n25-1-mem",
+          ].forEach((id) => {
+            _setMemTile(id, 0, 30);
+          });
+          history.gpu_n29_0.length = 0;
+          history.gpu_n29_1.length = 0;
+          history.gpu_n25_0.length = 0;
+          history.gpu_n25_1.length = 0;
+          history.tx.length = 0;
+          history.labels.length = 0;
+          if (utilChart) {
+            utilChart.data.labels = [];
+            utilChart.data.datasets.forEach((ds) => (ds.data = []));
+            utilChart.update("none");
+          }
+          updateLineChart(txChart, [], []);
+          if (tputLatChart) {
+            tputLatChart.data.labels = [];
+            tputLatChart.data.datasets.forEach((ds) => (ds.data = []));
+            tputLatChart.update("none");
+          }
+        }
+        _prevIsRunning = isRunning;
 
-  // Business KPIs
-  const biz = data.business || {};
-  document.getElementById('kpi-exposure').textContent = '$' + fmtComma(biz.fraud_exposure_usd || 0);
-  document.getElementById('kpi-txns').textContent = fmtComma(biz.total_transactions || 0);
-  document.getElementById('kpi-flagged').textContent = fmtComma(biz.fraud_flagged || 0);
-  document.getElementById('kpi-fraud-rate').textContent = (biz.fraud_rate_pct || 0).toFixed(2) + '%';
+        // Dim business KPI tiles when stopped — values are preserved as final run summary
+        const BIZ_KPI_IDS = [
+          "kpi-exposure",
+          "kpi-txns",
+          "kpi-flagged",
+          "kpi-fraud-rate",
+          "kpi-total-amt",
+          "kpi-decision-latency",
+          "kpi-vol",
+        ];
+        BIZ_KPI_IDS.forEach((id) => {
+          const card = document.getElementById(id)?.closest(".kpi-card");
+          if (card) card.classList.toggle("kpi-frozen", !isRunning);
+        });
 
-  // System KPIs
-  const sys = data.system || {};
-  document.getElementById('kpi-cpu').textContent = (sys.cpu_percent_n29 || sys.cpu_percent || 0).toFixed(1) + '%';
-  const cpuN25El = document.getElementById('kpi-cpu-n25');
-  if (cpuN25El) cpuN25El.textContent = (sys.cpu_percent_n25 || 0).toFixed(1) + '%';
-  document.getElementById('kpi-ram').textContent = (sys.ram_percent || 0).toFixed(1) + '%';
-  document.getElementById('kpi-ram-sub').textContent = (sys.ram_used_gb || 0).toFixed(1) + ' GB used';
+        // Env badge — suppressed when show_in_dev/show_in_prod is false in demo-config
+        const envInline = document.getElementById("env-inline");
+        if (envInline && data.env) {
+          const envCfg = DEMO_CONFIG.env || {};
+          const isDevEnv = data.env === "DEV";
+          const show = isDevEnv
+            ? envCfg.show_in_dev !== false
+            : envCfg.show_in_prod !== false;
+          envInline.textContent = show ? "(" + data.env + ")" : "";
+        }
 
-  // GPU KPIs (per-GPU from DCGM)
-  const gpu = data.gpu || {};
-  const gn29_0 = gpu.gpu_n29_0_util_pct || 0;
-  const gn29_1 = gpu.gpu_n29_1_util_pct || 0;
-  const gn25_0 = gpu.gpu_n25_0_util_pct || 0;
-  const gn25_1 = gpu.gpu_n25_1_util_pct || 0;
-  document.getElementById('kpi-gpu-n29-0').textContent = gn29_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-0-mem').textContent = (gpu.gpu_n29_0_mem_pct || 0).toFixed(1) + '% mem';
-  document.getElementById('kpi-gpu-n29-1').textContent = gn29_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n29-1-mem').textContent = (gpu.gpu_n29_1_mem_pct || 0).toFixed(1) + '% mem';
-  document.getElementById('kpi-gpu-n25-0').textContent = gn25_0.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-0-mem').textContent = (gpu.gpu_n25_0_mem_pct || 0).toFixed(1) + '% mem';
-  document.getElementById('kpi-gpu-n25-1').textContent = gn25_1.toFixed(1) + '%';
-  document.getElementById('kpi-gpu-n25-1-mem').textContent = (gpu.gpu_n25_1_mem_pct || 0).toFixed(1) + '% mem';
+        // Liveness badge — shown always; green=all pods Ready, red=degraded
+        const livenessBadge = document.getElementById("liveness-badge");
+        const livenessText = document.getElementById("liveness-text");
+        if (livenessBadge) {
+          const health = data.health || "Offline";
+          if (health === "Live") {
+            livenessBadge.className = "live-badge";
+            livenessText.textContent = "LIVE";
+          } else if (health === "Starting") {
+            livenessBadge.className = "live-badge starting";
+            livenessText.textContent = "STARTING";
+          } else if (health === "Error") {
+            livenessBadge.className = "live-badge error";
+            livenessText.textContent = "ERROR";
+          } else {
+            livenessBadge.className = "live-badge connecting";
+            livenessText.textContent = "OFFLINE";
+          }
+        }
 
-  // Volume processed (infra tab)
-  const totalTx = biz.total_transactions || 0;
-  document.getElementById('kpi-vol').textContent = fmtNum(totalTx);
-  document.getElementById('kpi-vol-sub').textContent = fmtComma(totalTx) + ' transactions';
+        // Elapsed — sync from server to stay accurate, tick locally every second
+        const e = data.elapsed_sec || 0;
+        if (Math.abs(e - _elapsedSec) > 1) _elapsedSec = e; // resync if drift > 1s
+        _elapsedRunning = isRunning;
 
-  // Throughput (prep processing rate)
-  const fb = data.flashblade || {};
-  const fbNfsOps = fb.avg_latency_ms || 0;
+        // Track first scoring batch for Phase 2 modal completion
+        if (
+          !_firstBatchSeen &&
+          _phase2Active &&
+          (data.business || {}).fraud_exposure_usd > 0
+        ) {
+          _firstBatchSeen = true;
+        }
 
-  // CPU values for both nodes
-  const cpuN29 = sys.cpu_percent_n29 || sys.cpu_percent || 0;
-  const cpuN25 = sys.cpu_percent_n25 || 0;
+        // Business KPIs
+        const biz = data.business || {};
+        document.getElementById("kpi-exposure").textContent = fmtDollarAlwaysM(
+          biz.fraud_exposure_usd || 0,
+        );
+        document.getElementById("kpi-txns").textContent = fmtTxCount(
+          biz.total_transactions || 0,
+        );
+        document.getElementById("kpi-flagged").textContent = fmtFlagged(
+          biz.fraud_flagged || 0,
+        );
+        document.getElementById("kpi-fraud-rate").textContent =
+          (biz.fraud_rate_pct || 0).toFixed(2) + "%";
+        document.getElementById("kpi-total-amt").textContent = fmtDollarAlwaysM(
+          biz.total_amount_processed_usd || 0,
+        );
+        const decisionLatMs = biz.decision_latency_ms || 0;
+        const dlEl = document.getElementById("kpi-decision-latency");
+        if (dlEl)
+          dlEl.textContent =
+            decisionLatMs > 0 ? decisionLatMs.toFixed(3) + " ms" : "—";
 
-  // Update time-series history
-  const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  // prep_rows_per_sec from business KPIs (GPU processing rate)
-  const txRate = biz.prep_rows_per_sec || 0;
+        // System KPIs
+        const sys = data.system || {};
 
-  pushHistory(history.gpu_n29_0, gn29_0);
-  pushHistory(history.gpu_n29_1, gn29_1);
-  pushHistory(history.gpu_n25_0, gn25_0);
-  pushHistory(history.gpu_n25_1, gn25_1);
-  pushHistory(history.cpu_n29, cpuN29);
-  pushHistory(history.cpu_n25, cpuN25);
-  pushHistory(history.tx, txRate);
-  pushHistory(history.fbLatency, fbNfsOps);
-  pushHistory(history.labels, now);
+        // GPU KPIs (role-based keys — stable regardless of k8s GPU assignment order)
+        const gpu = data.gpu || {};
+        const gpuWin = data.gpu_window_s || 30;
+        const gScoring = gpu.gpu_scoring_util_pct || 0;
+        const gTriton = gpu.gpu_triton_util_pct || 0;
+        const gPrep = gpu.gpu_prep_util_pct || 0;
+        const gTraining = gpu.gpu_training_util_pct || 0;
+        document.getElementById("kpi-gpu-n29-0").textContent =
+          gScoring.toFixed(1) + "%";
+        _setMemTile("kpi-gpu-n29-0-mem", gpu.gpu_scoring_mem_pct || 0, gpuWin);
+        document.getElementById("kpi-gpu-n29-1").textContent =
+          gTriton.toFixed(1) + "%";
+        _setMemTile("kpi-gpu-n29-1-mem", gpu.gpu_triton_mem_pct || 0, gpuWin);
+        document.getElementById("kpi-gpu-n25-0").textContent =
+          gPrep.toFixed(1) + "%";
+        _setMemTile("kpi-gpu-n25-0-mem", gpu.gpu_prep_mem_pct || 0, gpuWin);
+        document.getElementById("kpi-gpu-n25-1").textContent =
+          gTraining.toFixed(1) + "%";
+        _setMemTile("kpi-gpu-n25-1-mem", gpu.gpu_training_mem_pct || 0, gpuWin);
+        // Dim tiles when all GPU values are zero (metrics unavailable vs. GPU idle)
+        const allGpuZero = [gScoring, gTriton, gPrep, gTraining].every(
+          (v) => v === 0,
+        );
+        const gpuTileColors = {
+          "kpi-gpu-n29-0": "#bc8cff",
+          "kpi-gpu-n29-1": "#58a6ff",
+          "kpi-gpu-n25-0": "#f0883e",
+          "kpi-gpu-n25-1": "#3fb950",
+        };
+        Object.entries(gpuTileColors).forEach(([id, color]) => {
+          document.getElementById(id).style.color = allGpuZero
+            ? "var(--text-muted)"
+            : color;
+        });
 
-  updateLineChart(txChart, history.labels, history.tx);
+        // Volume processed (infra tab)
+        const totalTx = biz.total_transactions || 0;
+        document.getElementById("kpi-vol").textContent = fmtTxCount(totalTx);
+        document.getElementById("kpi-vol-sub").textContent =
+          fmtTxCount(totalTx) + " transactions";
 
-  // Chart 1: GPU / CPU Utilization
-  if (utilChart) {
-    utilChart.data.labels = [...history.labels];
-    utilChart.data.datasets[0].data = [...history.gpu_n29_0];
-    utilChart.data.datasets[1].data = [...history.gpu_n29_1];
-    utilChart.data.datasets[2].data = [...history.gpu_n25_0];
-    utilChart.data.datasets[3].data = [...history.gpu_n25_1];
-    utilChart.data.datasets[4].data = [...history.cpu_n29];
-    utilChart.data.datasets[5].data = [...history.cpu_n25];
-    utilChart.data.datasets[6].data = [...history.fbLatency];
-    utilChart.update('none');
-  }
+        // Throughput (prep processing rate)
+        const fb = data.flashblade || {};
+        const fbNfsOps = fb.avg_latency_ms || 0;
 
-  // Chart 2: Processing Throughput & Latency
-  if (tputLatChart) {
-    tputLatChart.data.labels = [...history.labels];
-    tputLatChart.data.datasets[0].data = [...history.tx];
-    tputLatChart.data.datasets[1].data = [...history.fbLatency];
-    tputLatChart.update('none');
-  }
+        // Update time-series history
+        const now = new Date().toLocaleTimeString("en-US", {
+          hour12: false,
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+        // prep_rows_per_sec from business KPIs (GPU processing rate)
+        const txRate = biz.prep_rows_per_sec || 0;
 
-  // Category fraud estimates (proportional to total fraud, weighted by category)
-  const fraudFlagged = biz.fraud_flagged || 0;
-  const highFraudCats = new Set(['shopping_net', 'travel', 'misc_net']);
-  const catData = ALL_CATS.map(c => {
-    const weight = highFraudCats.has(c) ? 3 : 1;
-    return Math.round(fraudFlagged * weight / (ALL_CATS.length + (highFraudCats.size * 2)));
-  });
-  if (catChart) {
-    catChart.data.datasets[0].data = catData;
-    catChart.update();
-  }
+        // Chart uses real-time instant values (not max-window) so spikes are visible
+        const gpuRt = data.gpu_rt || {};
+        pushHistory(history.gpu_scoring, gpuRt.gpu_scoring_util_pct || 0);
+        pushHistory(history.gpu_triton, gpuRt.gpu_triton_util_pct || 0);
+        pushHistory(history.gpu_prep, gpuRt.gpu_prep_util_pct || 0);
+        pushHistory(history.gpu_training, gpuRt.gpu_training_util_pct || 0);
+        pushHistory(history.tx, txRate);
+        pushHistory(history.fbLatency, fbNfsOps);
+        pushHistory(history.labels, now);
 
-  // Queue depths (Tab 2)
-  function fmtQueue(q) {
-    if (!q) return '—';
-    return `${q.pending} pending \u2022 ${q.processing} processing \u2022 ${q.done} done`;
-  }
-  const queue = data.queue || {};
-  const qEl = id => document.getElementById(id);
-  if (qEl('q-raw'))  qEl('q-raw').textContent  = fmtQueue(queue.raw);
-  if (qEl('q-feat')) qEl('q-feat').textContent = fmtQueue(queue.features);
-  if (qEl('q-vol')) {
-    const rps = biz.prep_rows_per_sec || 0;
-    qEl('q-vol').textContent = `${fmtComma(totalTx)} TX processed \u2022 ${fmtComma(rps)} rows/sec`;
-  }
+        updateLineChart(txChart, history.labels, history.tx);
 
-  // Model metrics from telemetry
-  const train = (data.pipeline || {}).train || {};
-  if (train.f1) {
-    document.getElementById('kpi-f1').textContent = train.f1.toFixed(3);
-    document.getElementById('kpi-auc-pr').textContent = (train.auc_pr || 0).toFixed(3);
-  }
+        // Chart 1: GPU / CPU Utilization
+        if (utilChart) {
+          utilChart.data.labels = [...history.labels];
+          utilChart.data.datasets[0].data = [...history.gpu_scoring];
+          utilChart.data.datasets[1].data = [...history.gpu_triton];
+          utilChart.data.datasets[2].data = [...history.gpu_prep];
+          utilChart.data.datasets[3].data = [...history.gpu_training];
+          utilChart.data.datasets[4].data = [...history.fbLatency];
+          utilChart.update("none");
+        }
 
-  // Flow stats (Tab 3)
-  const scoring = (data.pipeline || {}).scoring || {};
-  const flowEl = document.getElementById('flow-stats');
-  if (flowEl && scoring.latency_ms) {
-    flowEl.textContent = `Latency: ${scoring.latency_ms?.toFixed(1)}ms \u2022 fraud_rate: ${((scoring.fraud_rate || 0) * 100).toFixed(2)}%`;
-  }
+        // Chart 2: Processing Throughput & Latency
+        if (tputLatChart) {
+          tputLatChart.data.labels = [...history.labels];
+          tputLatChart.data.datasets[0].data = [...history.tx];
+          tputLatChart.data.datasets[1].data = [...history.fbLatency];
+          tputLatChart.update("none");
+        }
 
-  // GNN model stats (Tab 3)
-  const gnnEl = document.getElementById('gnn-model-stats');
-  if (gnnEl && train.gnn_epochs) {
-    gnnEl.textContent = `Trained: ${train.gnn_epochs} epochs on ${fmtNum(train.n_train || 0)} rows`;
-  }
+        // Category fraud chart: use real per-category amounts from backend
+        const fraudByCat = (data.fraud || {}).fraud_by_category || {};
+        const catData = ALL_CATS.map((c) => fraudByCat[c] || 0);
+        if (catChart) {
+          catChart.data.datasets[0].data = catData;
+          catChart.update("none");
+        }
 
-  // Real alerts from scored data
-  updateAlertsReal(data.fraud || {});
+        // Fraud by geography table
+        const fraudByGeo = (data.fraud || {}).fraud_by_geography || {};
+        const geoBody = document.getElementById("geo-body");
+        if (geoBody) {
+          const geoJson = JSON.stringify(fraudByGeo);
+          if (geoJson !== _lastGeoJson) {
+            _lastGeoJson = geoJson;
+            const states = Object.keys(fraudByGeo).slice(0, 10);
+            if (states.length === 0) {
+              geoBody.innerHTML =
+                '<tr><td colspan="2" style="color:var(--text-muted);text-align:center;padding:20px">No scored data yet</td></tr>';
+            } else {
+              geoBody.innerHTML = states
+                .map(
+                  (st, i) =>
+                    `<tr><td>${st}</td><td>${fmtDollarCompact(fraudByGeo[st])}</td></tr>`,
+                )
+                .join("");
+            }
+          }
+        }
 
-  // Fraud score histogram (Tab 3, loaded on demand)
-  if (typeof updateFraudHistogram === 'function') updateFraudHistogram(data.fraud || {});
-}
+        // Queue depths (Tab 2)
+        function fmtQueue(q) {
+          if (!q) return "—";
+          return `${q.pending} pending \u2022 ${q.processing} processing \u2022 ${q.done} done`;
+        }
+        const queue = data.queue || {};
+        const qEl = (id) => document.getElementById(id);
+        if (qEl("q-raw")) qEl("q-raw").textContent = fmtQueue(queue.raw);
+        if (qEl("q-feat")) qEl("q-feat").textContent = fmtQueue(queue.features);
+        if (qEl("q-vol")) {
+          const rps = biz.prep_rows_per_sec || 0;
+          qEl("q-vol").textContent =
+            `${fmtTxCount(totalTx)} TX processed \u2022 ${fmtComma(rps)} rows/sec`;
+        }
 
-// ---------------------------------------------------------------------------
-// Alerts table (real scored data from fraud.recent_alerts)
-// ---------------------------------------------------------------------------
-function updateAlertsReal(fraud) {
-  const alerts = (fraud.recent_alerts || []);
-  const tbody = document.getElementById('alerts-body');
-  if (!alerts.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">No high-risk alerts yet — waiting for scorer</td></tr>';
-    return;
-  }
-  tbody.innerHTML = alerts.slice(0, 10).map((r, i) => {
-    const score = (r.fraud_score || 0).toFixed(3);
-    const cls   = r.fraud_score >= 0.9 ? 'risk-high' : 'risk-med';
-    const merch = (r.merchant || '').replace('fraud_', '').slice(0, 22);
-    const cat   = (r.category || '').replace('_', ' ');
-    const amt   = r.amt != null ? '$' + (+r.amt).toFixed(2) : '—';
-    return `<tr>
+        // Model metrics from telemetry
+        const train = (data.pipeline || {}).train || {};
+        if (train.f1) {
+          document.getElementById("kpi-f1").textContent =
+            (train.f1 * 100).toFixed(1) + "%";
+          document.getElementById("kpi-auc-pr").textContent =
+            ((train.auc_pr || 0) * 100).toFixed(1) + "%";
+        }
+
+        // Flow stats (Tab 3)
+        const scoring = (data.pipeline || {}).scoring || {};
+        const flowEl = document.getElementById("flow-stats");
+        if (flowEl && scoring.latency_ms) {
+          flowEl.textContent = `Latency: ${scoring.latency_ms?.toFixed(1)}ms \u2022 fraud_rate: ${((scoring.fraud_rate || 0) * 100).toFixed(2)}%`;
+        }
+
+        // GNN model stats (Tab 3)
+        const gnnEl = document.getElementById("gnn-model-stats");
+        if (gnnEl && train.gnn_epochs) {
+          gnnEl.textContent = `Trained: ${train.gnn_epochs} epochs on ${fmtComma(train.n_train || 0)} rows`;
+        }
+
+        // Real alerts from scored data
+        updateAlertsReal(data.fraud || {});
+
+        // Fraud score histogram (Tab 3, loaded on demand)
+        if (typeof updateFraudHistogram === "function")
+          updateFraudHistogram(data.fraud || {});
+      }
+
+      // ---------------------------------------------------------------------------
+      // Alerts table (real scored data from fraud.recent_alerts)
+      // ---------------------------------------------------------------------------
+      let _lastAlertsJson = "";
+      let _lastGeoJson = "";
+      function updateAlertsReal(fraud) {
+        const alerts = fraud.recent_alerts || [];
+        const alertsJson = JSON.stringify(alerts);
+        if (alertsJson === _lastAlertsJson) return;
+        _lastAlertsJson = alertsJson;
+        const tbody = document.getElementById("alerts-body");
+        if (!alerts.length) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">No high-risk alerts yet — waiting for scorer</td></tr>';
+          return;
+        }
+        tbody.innerHTML = alerts
+          .slice(0, 10)
+          .map((r, i) => {
+            const score = (r.fraud_score || 0).toFixed(3);
+            const cls = r.fraud_score >= 0.9 ? "risk-high" : "risk-med";
+            const merch = (r.merchant || "").replace("fraud_", "").slice(0, 22);
+            const cat = (r.category || "").replace("_", " ");
+            const amt = r.amt != null ? "$" + (+r.amt).toFixed(2) : "—";
+            return `<tr>
       <td>${i + 1}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${merch}</td>
       <td>${cat}</td>
       <td>${amt}</td>
       <td class="${cls}">${score}</td>
     </tr>`;
-  }).join('');
-}
+          })
+          .join("");
+      }
 
-// ---------------------------------------------------------------------------
-// Fraud score histogram (Tab 3)
-// ---------------------------------------------------------------------------
-let fraudHistChart = null;
-function updateFraudHistogram(fraud) {
-  if (!fraud.total_scored) return;
-  const ctx = document.getElementById('fraud-hist-chart');
-  if (!ctx) return;
-  const buckets = new Array(5).fill(0);
-  (fraud.recent_alerts || []).forEach(a => {
-    const s = a.fraud_score || 0;
-    const b = Math.min(4, Math.floor((s - 0.8) / 0.04));
-    if (b >= 0) buckets[b]++;
-  });
-  const labels = ['0.80','0.84','0.88','0.92','0.96'];
-  const colors = labels.map((_, i) => i >= 3 ? '#f8514999' : '#e3b34199');
-  if (fraudHistChart) {
-    fraudHistChart.data.datasets[0].data = buckets;
-    fraudHistChart.update('none');
-  } else {
-    fraudHistChart = new Chart(ctx, {
-      type: 'bar',
-      data: { labels, datasets: [{ data: buckets, backgroundColor: colors, borderRadius: 3 }] },
-      options: {
-        responsive: true, maintainAspectRatio: false, animation: { duration: 200 },
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.parsed.y} alerts` } } },
-        scales: {
-          x: { ticks: { color: '#8b949e', font: { size: 9 } }, grid: { color: 'rgba(48,54,61,0.3)' }, title: { display: true, text: 'Fraud Score', color: '#8b949e', font: { size: 10 } } },
-          y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(48,54,61,0.3)' }, title: { display: true, text: 'Count', color: '#8b949e', font: { size: 10 } } }
+      // ---------------------------------------------------------------------------
+      // Fraud score histogram (Tab 3)
+      // ---------------------------------------------------------------------------
+      let fraudHistChart = null;
+      function updateFraudHistogram(fraud) {
+        if (!fraud.total_scored) return;
+        const ctx = document.getElementById("fraud-hist-chart");
+        if (!ctx) return;
+        const buckets = new Array(5).fill(0);
+        (fraud.recent_alerts || []).forEach((a) => {
+          const s = a.fraud_score || 0;
+          const b = Math.min(4, Math.floor((s - 0.8) / 0.04));
+          if (b >= 0) buckets[b]++;
+        });
+        const labels = ["0.80", "0.84", "0.88", "0.92", "0.96"];
+        const colors = labels.map((_, i) =>
+          i >= 3 ? "#f8514999" : "#e3b34199",
+        );
+        if (fraudHistChart) {
+          fraudHistChart.data.datasets[0].data = buckets;
+          fraudHistChart.update("none");
+        } else {
+          fraudHistChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels,
+              datasets: [
+                { data: buckets, backgroundColor: colors, borderRadius: 3 },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: { duration: 200 },
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: { label: (c) => ` ${c.parsed.y} alerts` },
+                },
+              },
+              scales: {
+                x: {
+                  ticks: { color: "#8b949e", font: { size: 9 } },
+                  grid: { color: "rgba(48,54,61,0.3)" },
+                  title: {
+                    display: true,
+                    text: "Fraud Score",
+                    color: "#8b949e",
+                    font: { size: 10 },
+                  },
+                },
+                y: {
+                  ticks: { color: "#8b949e", font: { size: 10 } },
+                  grid: { color: "rgba(48,54,61,0.3)" },
+                  title: {
+                    display: true,
+                    text: "Count",
+                    color: "#8b949e",
+                    font: { size: 10 },
+                  },
+                },
+              },
+            },
+          });
         }
       }
-    });
-  }
-}
 
-// ---------------------------------------------------------------------------
-// SHAP chart
-// ---------------------------------------------------------------------------
-async function loadShap() {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 10000);
-    const resp = await fetch('/api/metrics/shap', { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!resp.ok) { document.getElementById('shap-status').textContent = 'SHAP data not ready yet — run the pipeline first.'; return; }
-    const data = await resp.json();
-    const features = data.top_features || [];
-    if (!features.length) return;
+      // ---------------------------------------------------------------------------
+      // SHAP chart
+      // ---------------------------------------------------------------------------
+      async function loadShap() {
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp = await fetch("/api/metrics/shap", {
+            signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          if (!resp.ok) {
+            document.getElementById("shap-status").textContent =
+              "SHAP data not ready yet — run the pipeline first.";
+            return;
+          }
+          const data = await resp.json();
+          const features = data.top_features || [];
+          if (!features.length) return;
 
-    document.getElementById('shap-status').textContent = '';
-    const labels = features.map(f => f[0]);
-    const values = features.map(f => f[1]);
+          document.getElementById("shap-status").textContent = "";
+          const labels = features.map((f) => f[0]);
+          const values = features.map((f) => f[1]);
 
-    const ctx = document.getElementById('shap-chart');
-    if (!ctx) return;
-    if (shapChart) shapChart.destroy();
-    shapChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{ data: values, backgroundColor: '#58a6ff99', borderColor: '#58a6ff', borderWidth: 1, borderRadius: 4 }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        indexAxis: 'y',
-        plugins: { legend: { display: false }, tooltip: { callbacks: {
-          label: ctx => ' ' + ctx.parsed.x.toFixed(4)
-        }}},
-        scales: {
-          x: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: 'rgba(48,54,61,0.5)' }, title: { display: true, text: 'Mean |SHAP|', color: '#8b949e', font: { size: 11 } } },
-          y: { ticks: { color: '#e6edf3', font: { size: 11 } }, grid: { color: 'rgba(48,54,61,0.3)' } }
+          const ctx = document.getElementById("shap-chart");
+          if (!ctx) return;
+          if (shapChart) shapChart.destroy();
+          shapChart = new Chart(ctx, {
+            type: "bar",
+            data: {
+              labels,
+              datasets: [
+                {
+                  data: values,
+                  backgroundColor: "#58a6ff99",
+                  borderColor: "#58a6ff",
+                  borderWidth: 1,
+                  borderRadius: 4,
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              indexAxis: "y",
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => " " + ctx.parsed.x.toFixed(4),
+                  },
+                },
+              },
+              scales: {
+                x: {
+                  ticks: { color: "#8b949e", font: { size: 10 } },
+                  grid: { color: "rgba(48,54,61,0.5)" },
+                  title: {
+                    display: true,
+                    text: "Mean |SHAP|",
+                    color: "#8b949e",
+                    font: { size: 11 },
+                  },
+                },
+                y: {
+                  ticks: { color: "#e6edf3", font: { size: 11 } },
+                  grid: { color: "rgba(48,54,61,0.3)" },
+                },
+              },
+            },
+          });
+
+          shapLoaded = true;
+        } catch (e) {
+          document.getElementById("shap-status").textContent =
+            "Error loading SHAP: " + e.message;
         }
       }
-    });
 
-    shapLoaded = true;
-  } catch (e) { document.getElementById('shap-status').textContent = 'Error loading SHAP: ' + e.message; }
-}
+      async function loadTrainingMetrics() {
+        try {
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 10000);
+          const resp = await fetch("/api/metrics/training", {
+            signal: ctrl.signal,
+          });
+          clearTimeout(timer);
+          if (!resp.ok) return;
+          const m = await resp.json();
+          if (m.f1 !== undefined)
+            document.getElementById("kpi-f1").textContent =
+              (m.f1 * 100).toFixed(1) + "%";
+          if (m.auc_pr !== undefined)
+            document.getElementById("kpi-auc-pr").textContent =
+              (m.auc_pr * 100).toFixed(1) + "%";
+          if (m.precision !== undefined)
+            document.getElementById("kpi-prec").textContent =
+              (m.precision * 100).toFixed(1) + "%";
+          if (m.recall !== undefined)
+            document.getElementById("kpi-recall").textContent =
+              (m.recall * 100).toFixed(1) + "%";
+        } catch (e) {
+          /* silent */
+        }
+      }
 
-async function loadTrainingMetrics() {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 10000);
-    const resp = await fetch('/api/metrics/training', { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!resp.ok) return;
-    const m = await resp.json();
-    if (m.f1 !== undefined) document.getElementById('kpi-f1').textContent = m.f1.toFixed(3);
-    if (m.auc_pr !== undefined) document.getElementById('kpi-auc-pr').textContent = m.auc_pr.toFixed(3);
-    if (m.precision !== undefined) document.getElementById('kpi-prec').textContent = m.precision.toFixed(3);
-    if (m.recall !== undefined) document.getElementById('kpi-recall').textContent = m.recall.toFixed(3);
-  } catch (e) { /* silent */ }
-}
+      // ---------------------------------------------------------------------------
+      // Helpers
+      // ---------------------------------------------------------------------------
+      function pushHistory(arr, val) {
+        arr.push(val);
+        if (arr.length > MAX_HISTORY) arr.shift();
+      }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function pushHistory(arr, val) {
-  arr.push(val);
-  if (arr.length > MAX_HISTORY) arr.shift();
-}
+      function updateLineChart(chart, labels, data) {
+        if (!chart) return;
+        chart.data.labels = [...labels];
+        chart.data.datasets[0].data = [...data];
+        chart.update("none");
+      }
 
-function updateLineChart(chart, labels, data) {
-  if (!chart) return;
-  chart.data.labels = [...labels];
-  chart.data.datasets[0].data = [...data];
-  chart.update('none');
-}
+      function fmtNum(n) {
+        if (!n || isNaN(n)) return "0";
+        return numeral(n).format("0.[0]a").toUpperCase();
+      }
+      function fmtDollar(n) {
+        if (!n || isNaN(n)) return "$0";
+        return numeral(n).format("$0.[0]a").toUpperCase();
+      }
+      function fmtComma(n) {
+        return numeral(Math.round(n || 0)).format("0,0");
+      }
+      // Updates GPU mem tile: displays maximum utilization over the measurement window
+      function _setMemTile(id, memPct, windowSecs) {
+        const valEl = document.getElementById(id + "-val");
+        const lblEl = document.getElementById(id + "-label");
+        if (valEl) valEl.textContent = "";
+        if (lblEl)
+          lblEl.textContent =
+            "Peak utilization in the last " + windowSecs + " secs";
+      }
 
-function fmtNum(n) {
-  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-  return String(Math.round(n));
-}
-function fmtComma(n) {
-  return Math.round(n).toLocaleString();
-}
+      // Transactions / Volume Processed: comma integer below 100M, X.XXM at or above 100M.
+      // Keeps sub-million changes visible during live scoring runs.
+      function fmtTxCount(n) {
+        if (!n || isNaN(n)) return "0";
+        if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + "B";
+        if (n >= 100_000_000) return (n / 1_000_000).toFixed(2) + "M";
+        return numeral(Math.round(n)).format("0,0");
+      }
 
-// ---------------------------------------------------------------------------
-// Tab navigation
-// ---------------------------------------------------------------------------
-function showTab(name, btn) {
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('tab-' + name).classList.add('active');
-  btn.classList.add('active');
+      // Fraud Flagged: always a full comma-separated integer so every new flag is visible.
+      function fmtFlagged(n) {
+        if (!n || isNaN(n)) return "0";
+        if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + "B";
+        return numeral(Math.round(n)).format("0,0");
+      }
 
-  if (name === 'model' && !modelTabOpened) {
-    modelTabOpened = true;
-    loadShap();
-    loadTrainingMetrics();
-  }
-}
+      // Dollar KPIs (Fraud Exposure, Total $ Processed): $X,XXX below $1M, $X.XXM above.
+      // Two decimal places ensure sub-million changes remain visible at the M scale.
+      function fmtDollarCompact(n) {
+        if (!n || isNaN(n)) return "$0";
+        if (n >= 1_000_000_000)
+          return "$" + (n / 1_000_000_000).toFixed(2) + "B";
+        if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+        return "$" + numeral(Math.round(n)).format("0,0");
+      }
+      // Total $ Processed only — always stays in M so live changes are visible; commas in large M values
+      function fmtDollarAlwaysM(n) {
+        if (!n || isNaN(n)) return "$0";
+        if (n >= 1_000_000)
+          return "$" + numeral(n / 1_000_000).format("0,0.00") + "M";
+        return "$" + numeral(Math.round(n)).format("0,0");
+      }
 
-// ---------------------------------------------------------------------------
-// Control actions
-// ---------------------------------------------------------------------------
-let _ctlTimer = null;
-const ALL_BTNS = ['start-btn','stop-btn','reset-btn'];
+      // ---------------------------------------------------------------------------
+      // Tab navigation
+      // ---------------------------------------------------------------------------
+      function showTab(name, btn) {
+        document
+          .querySelectorAll(".tab-pane")
+          .forEach((p) => p.classList.remove("active"));
+        document
+          .querySelectorAll(".tab-btn")
+          .forEach((b) => b.classList.remove("active"));
+        document.getElementById("tab-" + name).classList.add("active");
+        btn.classList.add("active");
 
-function _ctlShow(title, sub) {
-  if (_ctlTimer) { clearTimeout(_ctlTimer); _ctlTimer = null; }
-  stopPodPolling();
-  document.getElementById('pod-modal-title').textContent    = title;
-  document.getElementById('pod-modal-title').style.color    = 'var(--text)';
-  document.getElementById('pod-modal-sub').textContent      = sub;
-  document.getElementById('pod-modal-dismiss').style.display = 'none';
-  document.getElementById('pod-modal-cancel').style.display  = 'none';
-  document.getElementById('pod-modal-chips').innerHTML      = '';
-  document.getElementById('pod-modal-backdrop').classList.add('visible');
-  ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
-}
+        if (name === "model" && !modelTabOpened) {
+          modelTabOpened = true;
+          loadShap();
+          loadTrainingMetrics();
+        }
+      }
 
-function _ctlConfirm(title, body, confirmLabel) {
-  return new Promise(resolve => {
-    document.getElementById('pod-modal-title').textContent   = title;
-    document.getElementById('pod-modal-title').style.color   = 'var(--text)';
-    document.getElementById('pod-modal-sub').textContent     = body;
-    document.getElementById('pod-modal-chips').innerHTML     = '';
-    document.getElementById('pod-modal-backdrop').classList.add('visible');
-    ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+      // ---------------------------------------------------------------------------
+      // Control actions
+      // ---------------------------------------------------------------------------
+      let _ctlTimer = null;
+      const ALL_BTNS = ["start-btn", "stop-btn", "reset-btn"];
 
-    const ok  = document.getElementById('pod-modal-dismiss');
-    const can = document.getElementById('pod-modal-cancel');
-    ok.textContent  = confirmLabel || 'Confirm';
-    ok.style.background = 'var(--red)';
-    ok.style.display = 'block';
-    can.textContent = 'Cancel';
-    can.style.display = 'block';
+      function _ctlShow(title, sub) {
+        if (_ctlTimer) {
+          clearTimeout(_ctlTimer);
+          _ctlTimer = null;
+        }
+        stopPodPolling();
+        document.getElementById("pod-modal-title").textContent = title;
+        document.getElementById("pod-modal-title").style.color = "var(--text)";
+        document.getElementById("pod-modal-sub").textContent = sub;
+        document.getElementById("pod-modal-dismiss").style.display = "none";
+        document.getElementById("pod-modal-cancel").style.display = "none";
+        document.getElementById("pod-modal-chips").innerHTML = "";
+        document.getElementById("pod-modal-backdrop").classList.add("visible");
+        ALL_BTNS.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = true;
+        });
+      }
 
-    ok.onclick = () => {
-      ok.style.background = '';
-      ok.style.display = 'none';
-      can.style.display = 'none';
-      resolve(true);
-    };
-    can.onclick = () => {
-      document.getElementById('pod-modal-backdrop').classList.remove('visible');
-      ok.style.background = '';
-      ok.style.display = 'none';
-      can.style.display = 'none';
-      ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
-      resolve(false);
-    };
-  });
-}
+      function _ctlConfirm(title, body, confirmLabel) {
+        return new Promise((resolve) => {
+          document.getElementById("pod-modal-title").textContent = title;
+          document.getElementById("pod-modal-title").style.color =
+            "var(--text)";
+          document.getElementById("pod-modal-sub").textContent = body;
+          document.getElementById("pod-modal-chips").innerHTML = "";
+          document
+            .getElementById("pod-modal-backdrop")
+            .classList.add("visible");
+          ALL_BTNS.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = true;
+          });
 
-function _ctlDone(title, sub, dismissLabel, onDismiss) {
-  if (_ctlTimer) { clearTimeout(_ctlTimer); _ctlTimer = null; }
-  document.getElementById('pod-modal-title').textContent = title;
-  document.getElementById('pod-modal-title').style.color = 'var(--green)';
-  document.getElementById('pod-modal-sub').textContent   = sub;
-  const btn = document.getElementById('pod-modal-dismiss');
-  btn.textContent = dismissLabel || 'Dismiss';
-  btn.style.display = 'block';
-  btn.onclick = () => {
-    document.getElementById('pod-modal-backdrop').classList.remove('visible');
-    ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
-    document.getElementById('start-btn').textContent = '▶ Start';
-    if (onDismiss) onDismiss();
-  };
-}
+          const ok = document.getElementById("pod-modal-dismiss");
+          const can = document.getElementById("pod-modal-cancel");
+          ok.textContent = confirmLabel || "Confirm";
+          ok.style.background = "var(--red)";
+          ok.style.display = "block";
+          can.textContent = "Cancel";
+          can.style.display = "block";
 
-function _ctlRenderPods(services, podEntries, mode) {
-  document.getElementById('pod-modal-chips').innerHTML = podEntries.map(([key, label]) => {
-    const st   = (services || {})[key] || (mode === 'down' ? 'Scaling' : 'Stopped');
-    const done = mode === 'down' ? st === 'Stopped' : st === 'Ready';
-    const idle = mode !== 'down' && st === 'Stopped';
-    const cls  = done ? 'pod-ready' : idle ? 'pod-stopped' : 'pod-scaling';
-    const icon = done ? '\u2713'    : idle ? '\u25CB'       : '\u27F3';
-    return `<div class="pod-modal-row ${cls}"><span class="icon">${icon}</span>${label}</div>`;
-  }).join('');
-}
+          ok.onclick = () => {
+            ok.style.background = "";
+            ok.style.display = "none";
+            can.style.display = "none";
+            resolve(true);
+          };
+          can.onclick = () => {
+            document
+              .getElementById("pod-modal-backdrop")
+              .classList.remove("visible");
+            ok.style.background = "";
+            ok.style.display = "none";
+            can.style.display = "none";
+            ALL_BTNS.forEach((id) => {
+              const el = document.getElementById(id);
+              if (el) el.disabled = false;
+            });
+            resolve(false);
+          };
+        });
+      }
 
-function _ctlRenderSteps(steps) {
-  document.getElementById('pod-modal-chips').innerHTML = steps.map(s => {
-    const cls  = s.done ? 'pod-ready' : s.active ? 'pod-scaling' : 'pod-stopped';
-    const icon = s.done ? '\u2713'    : s.active ? '\u27F3'      : '\u25CB';
-    return `<div class="pod-modal-row ${cls}"><span class="icon">${icon}</span>${s.label}</div>`;
-  }).join('');
-}
-
-function _ctlPoll(renderFn, doneFn) {
-  return new Promise(resolve => {
-    const tick = async () => {
-      try {
-        const d = await fetch('/api/status').then(r => r.json());
-        if (renderFn) renderFn(d);
-        if (doneFn(d)) { resolve(d); return; }
-      } catch(e) {}
-      _ctlTimer = setTimeout(tick, 2000);
-    };
-    tick();
-  });
-}
-
-async function _ctlRunSteps(steps, doneTitle, doneSub, dismissLabel, onDismiss) {
-  for (const s of steps) {
-    s.active = true; s.done = false;
-    _ctlRenderSteps(steps);
-    if (s.action) { try { await s.action(); } catch(e) {} }
-    if (s.check) {
-      await new Promise(resolve => {
-        const tick = async () => {
-          try { if (await s.check()) { resolve(); return; } } catch(e) {}
-          _ctlTimer = setTimeout(tick, 2000);
+      function _ctlDone(title, sub, dismissLabel, onDismiss) {
+        if (_ctlTimer) {
+          clearTimeout(_ctlTimer);
+          _ctlTimer = null;
+        }
+        document.getElementById("pod-modal-title").textContent = title;
+        document.getElementById("pod-modal-title").style.color = "var(--green)";
+        document.getElementById("pod-modal-sub").textContent = sub;
+        const btn = document.getElementById("pod-modal-dismiss");
+        btn.textContent = dismissLabel || "Dismiss";
+        btn.style.display = "block";
+        btn.onclick = () => {
+          document
+            .getElementById("pod-modal-backdrop")
+            .classList.remove("visible");
+          ALL_BTNS.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = false;
+          });
+          document.getElementById("start-btn").textContent = "▶ Start";
+          if (onDismiss) onDismiss();
         };
-        tick();
-      });
-    }
-    s.active = false; s.done = true;
-    _ctlRenderSteps(steps);
-    await new Promise(r => setTimeout(r, 350));
-  }
-  _ctlDone(doneTitle, doneSub, dismissLabel, onDismiss);
-}
+      }
 
-// Clear all dashboard displays (used by reset)
-function _clearDashboard() {
-  document.getElementById('alerts-body').innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:20px">Pipeline not running</td></tr>';
-  ['q-raw','q-feat','q-vol'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.textContent = '—';
-  });
-  document.getElementById('kpi-exposure').textContent = '$0';
-  document.getElementById('kpi-txns').textContent = '0';
-  document.getElementById('kpi-flagged').textContent = '0';
-  document.getElementById('kpi-fraud-rate').textContent = '0%';
-  document.getElementById('kpi-cpu').textContent = '0%';
-  const cpuN25El = document.getElementById('kpi-cpu-n25');
-  if (cpuN25El) cpuN25El.textContent = '0%';
-  document.getElementById('kpi-ram').textContent = '0%';
-  document.getElementById('kpi-ram-sub').textContent = '0 GB used';
-  ['kpi-gpu-n29-0','kpi-gpu-n29-1','kpi-gpu-n25-0','kpi-gpu-n25-1'].forEach(id => {
-    document.getElementById(id).textContent = '0%';
-  });
-  ['kpi-gpu-n29-0-mem','kpi-gpu-n29-1-mem','kpi-gpu-n25-0-mem','kpi-gpu-n25-1-mem'].forEach(id => {
-    document.getElementById(id).textContent = '0% mem';
-  });
-  ['kpi-f1','kpi-auc-pr','kpi-prec','kpi-recall'].forEach(id => { document.getElementById(id).textContent = '—'; });
-  history.gpu_n29_0.length = 0; history.gpu_n29_1.length = 0;
-  history.gpu_n25_0.length = 0; history.gpu_n25_1.length = 0;
-  history.cpu_n29.length = 0; history.cpu_n25.length = 0;
-  history.tx.length = 0; history.fbLatency.length = 0; history.labels.length = 0;
-  updateLineChart(txChart, [], []);
-  if (utilChart) { utilChart.data.labels = []; utilChart.data.datasets.forEach(ds => ds.data = []); utilChart.update('none'); }
-  if (tputLatChart) { tputLatChart.data.labels = []; tputLatChart.data.datasets.forEach(ds => ds.data = []); tputLatChart.update('none'); }
-  if (shapChart) { shapChart.destroy(); shapChart = null; }
-  if (fraudHistChart) { fraudHistChart.destroy(); fraudHistChart = null; }
-  shapLoaded = false;
-  document.getElementById('shap-status').textContent = 'SHAP data not ready yet — run the pipeline first.';
-  document.getElementById('start-btn').textContent = '▶ Start';
-}
+      function _ctlRenderPods(services, podEntries, mode) {
+        document.getElementById("pod-modal-chips").innerHTML = podEntries
+          .map(([key, label]) => {
+            const st =
+              (services || {})[key] ||
+              (mode === "down" ? "Scaling" : "Stopped");
+            const done = mode === "down" ? st === "Stopped" : st === "Ready";
+            const idle = mode !== "down" && st === "Stopped";
+            const cls = done
+              ? "pod-ready"
+              : idle
+                ? "pod-stopped"
+                : "pod-scaling";
+            const icon = done ? "\u2713" : idle ? "\u25CB" : "\u27F3";
+            return `<div class="pod-modal-row ${cls}"><span class="icon">${icon}</span>${label}</div>`;
+          })
+          .join("");
+      }
 
-// ============================================================
-// Control actions
-// ============================================================
-async function startPipeline() {
-  const btn = document.getElementById('start-btn');
-  btn.disabled = true; btn.textContent = '…Starting';
-  try {
-    await fetch('/api/control/start', { method: 'POST' });
-    showPodModal();
-  } catch (e) {
-    btn.textContent = '▶ Start'; btn.className = 'btn-primary'; btn.disabled = false;
-  }
-}
+      function _ctlRenderSteps(steps) {
+        document.getElementById("pod-modal-chips").innerHTML = steps
+          .map((s) => {
+            const cls = s.done
+              ? "pod-ready"
+              : s.active
+                ? "pod-scaling"
+                : "pod-stopped";
+            const icon = s.done ? "\u2713" : s.active ? "\u27F3" : "\u25CB";
+            return `<div class="pod-modal-row ${cls}"><span class="icon">${icon}</span>${s.label}</div>`;
+          })
+          .join("");
+      }
 
-async function stopPipeline() {
-  _ctlShow('Stopping Pipeline...', 'Scaling all pods to zero');
-  const pods = Object.entries(SERVICE_LABELS);
-  _ctlRenderPods({}, pods, 'down');
-  fetch('/api/control/stop', { method: 'POST' }).catch(() => {});
-  await _ctlPoll(
-    d => _ctlRenderPods(d.services || {}, pods, 'down'),
-    d => pods.every(([k]) => ['Stopped','NotFound'].includes((d.services || {})[k]))
-  );
-  _ctlDone('Pipeline Stopped', 'All pods scaled to zero. Ready to start again.', null, null);
-}
+      function _ctlPoll(renderFn, doneFn) {
+        return new Promise((resolve) => {
+          const tick = async () => {
+            try {
+              const d = await fetch("/api/status").then((r) => r.json());
+              if (renderFn) renderFn(d);
+              if (doneFn(d)) {
+                resolve(d);
+                return;
+              }
+            } catch (e) {}
+            _ctlTimer = setTimeout(tick, 2000);
+          };
+          tick();
+        });
+      }
 
-async function resetPipeline() {
-  const ok = await _ctlConfirm(
-    'Reset Pipeline?',
-    'This will stop all pods, re-queue raw data for reprocessing, and clear features/scores. Models are preserved.',
-    'Confirm Reset'
-  );
-  if (!ok) return;
-  _ctlShow('Resetting Pipeline...', 'Stopping pods and re-queuing raw data');
-  const pods = Object.entries(SERVICE_LABELS);
-  const steps = [
-    {
-      label:  'Stopping pipeline and re-queuing raw data',
-      action: () => fetch('/api/control/reset', { method: 'POST' }),
-      check:  async () => {
-        const d = await fetch('/api/status').then(r => r.json());
-        _ctlRenderPods(d.services || {}, pods, 'down');
-        return pods.every(([k]) => ['Stopped','NotFound'].includes((d.services || {})[k]));
-      },
-    },
-    {
-      label:  'Clearing dashboard',
-      action: async () => _clearDashboard(),
-    },
-  ];
-  await _ctlRunSteps(steps, 'Reset Complete', 'Raw data re-queued. Ready for a fresh run.', null, null);
-}
+      async function _ctlRunSteps(
+        steps,
+        doneTitle,
+        doneSub,
+        dismissLabel,
+        onDismiss,
+      ) {
+        for (const s of steps) {
+          s.active = true;
+          s.done = false;
+          _ctlRenderSteps(steps);
+          if (s.action) {
+            try {
+              await s.action();
+            } catch (e) {}
+          }
+          if (s.check) {
+            await new Promise((resolve) => {
+              const tick = async () => {
+                try {
+                  if (await s.check()) {
+                    resolve();
+                    return;
+                  }
+                } catch (e) {}
+                _ctlTimer = setTimeout(tick, 2000);
+              };
+              tick();
+            });
+          }
+          s.active = false;
+          s.done = true;
+          _ctlRenderSteps(steps);
+          await new Promise((r) => setTimeout(r, 350));
+        }
+        _ctlDone(doneTitle, doneSub, dismissLabel, onDismiss);
+      }
 
-// ---------------------------------------------------------------------------
-// Pod startup status bar
-// ---------------------------------------------------------------------------
-const SERVICE_LABELS = {
-  'data-prep':     'Data Prep',
-  'model-train':   'Model Train',
-  'triton':        'Triton',
-  'scoring':       'Scoring',
-};
+      // Clear all dashboard displays (used by reset) — restores to initial page-load state
+      function _clearDashboard() {
+        // --- Business KPI values ---
+        document.getElementById("kpi-exposure").textContent = "$0";
+        document.getElementById("kpi-txns").textContent = "0";
+        document.getElementById("kpi-flagged").textContent = "0";
+        document.getElementById("kpi-fraud-rate").textContent = "0%";
+        document.getElementById("kpi-total-amt").textContent = "$0";
+        const dlResetEl = document.getElementById("kpi-decision-latency");
+        if (dlResetEl) dlResetEl.textContent = "—";
 
-let podPollInterval = null;
+        // Remove frozen state (reset zeroes values; stop preserves them)
+        const BIZ_KPI_IDS = [
+          "kpi-exposure",
+          "kpi-txns",
+          "kpi-flagged",
+          "kpi-fraud-rate",
+          "kpi-total-amt",
+          "kpi-decision-latency",
+          "kpi-vol",
+        ];
+        BIZ_KPI_IDS.forEach((id) => {
+          const card = document.getElementById(id)?.closest(".kpi-card");
+          if (card) card.classList.remove("kpi-frozen");
+        });
 
-function showPodModal() {
-  _ctlShow('Starting Pipeline...', 'Pods are scaling up — takes 20-60 s on first start');
-  startPodPolling();
-}
+        // --- Infra KPIs ---
+        [
+          "kpi-gpu-n29-0",
+          "kpi-gpu-n29-1",
+          "kpi-gpu-n25-0",
+          "kpi-gpu-n25-1",
+        ].forEach((id) => {
+          document.getElementById(id).textContent = "0.0%";
+        });
+        [
+          "kpi-gpu-n29-0-mem",
+          "kpi-gpu-n29-1-mem",
+          "kpi-gpu-n25-0-mem",
+          "kpi-gpu-n25-1-mem",
+        ].forEach((id) => {
+          _setMemTile(id, "", 30);
+        });
+        document.getElementById("kpi-vol").textContent = "0";
+        document.getElementById("kpi-vol-sub").textContent = "transactions";
 
-function hidePodModal() {
-  if (_ctlTimer) { clearTimeout(_ctlTimer); _ctlTimer = null; }
-  document.getElementById('pod-modal-backdrop').classList.remove('visible');
-  stopPodPolling();
-  ALL_BTNS.forEach(id => { const el = document.getElementById(id); if (el) el.disabled = false; });
-  document.getElementById('start-btn').textContent = '▶ Start';
-}
+        // --- Queue displays ---
+        ["q-raw", "q-feat", "q-vol"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.textContent = "—";
+        });
 
-function startPodPolling() {
-  if (podPollInterval) return;
-  pollPodStatus();
-  podPollInterval = setInterval(pollPodStatus, 2000);
-}
+        // --- Alerts table ---
+        const alertsBody = document.getElementById("alerts-body");
+        if (alertsBody) {
+          alertsBody.textContent = "";
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 5;
+          td.style.cssText =
+            "color:var(--text-muted);text-align:center;padding:20px";
+          td.textContent = "Pipeline not running";
+          tr.appendChild(td);
+          alertsBody.appendChild(tr);
+        }
 
-function stopPodPolling() {
-  if (podPollInterval) { clearInterval(podPollInterval); podPollInterval = null; }
-}
+        // --- Geography table ---
+        const geoBody = document.getElementById("geo-body");
+        if (geoBody) {
+          geoBody.textContent = "";
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 2;
+          td.style.cssText =
+            "color:var(--text-muted);text-align:center;padding:20px";
+          td.textContent = "No scored data yet";
+          tr.appendChild(td);
+          geoBody.appendChild(tr);
+        }
+        _lastGeoJson = "";
 
-async function pollPodStatus() {
-  try {
-    const data = await fetch('/api/status').then(r => r.json());
-    renderPodStatus(data.services || {}, data.is_running);
-  } catch (e) {}
-}
+        // --- Category chart ---
+        if (catChart) {
+          catChart.data.datasets[0].data = new Array(
+            catChart.data.labels.length,
+          ).fill(0);
+          catChart.update("none");
+        }
 
-function renderPodStatus(services, isRunning) {
-  const backdrop = document.getElementById('pod-modal-backdrop');
-  if (!backdrop.classList.contains('visible')) return;
+        // --- Chart histories ---
+        history.gpu_scoring.length = 0;
+        history.gpu_triton.length = 0;
+        history.gpu_prep.length = 0;
+        history.gpu_training.length = 0;
+        history.tx.length = 0;
+        history.fbLatency.length = 0;
+        history.labels.length = 0;
+        updateLineChart(txChart, [], []);
+        if (utilChart) {
+          utilChart.data.labels = [];
+          utilChart.data.datasets.forEach((ds) => (ds.data = []));
+          utilChart.update("none");
+        }
+        if (tputLatChart) {
+          tputLatChart.data.labels = [];
+          tputLatChart.data.datasets.forEach((ds) => (ds.data = []));
+          tputLatChart.update("none");
+        }
 
-  if (!isRunning) { hidePodModal(); return; }
+        // --- Model / SHAP tab ---
+        ["kpi-f1", "kpi-auc-pr", "kpi-prec", "kpi-recall"].forEach((id) => {
+          document.getElementById(id).textContent = "—";
+        });
+        const gnnEl = document.getElementById("gnn-model-stats");
+        if (gnnEl) gnnEl.textContent = "—";
+        if (shapChart) {
+          shapChart.destroy();
+          shapChart = null;
+        }
+        if (fraudHistChart) {
+          fraudHistChart.destroy();
+          fraudHistChart = null;
+        }
+        shapLoaded = false;
+        modelTabOpened = false;
+        document.getElementById("shap-status").textContent =
+          "SHAP data loads automatically after model-build completes.";
 
-  _ctlRenderPods(services, Object.entries(SERVICE_LABELS), 'up');
+        // --- Elapsed timer ---
+        _elapsedSec = 0;
+        _elapsedRunning = false;
+        document.getElementById("elapsed").textContent = "00:00:00";
 
-  if (Object.keys(SERVICE_LABELS).every(k => services[k] === 'Ready')) {
-    stopPodPolling();
-    _ctlDone('All Pods Ready', 'Pipeline is running. Dismiss to view the dashboard.',
-             'All Ready — Dismiss', null);
-  }
-}
+        // --- Pod modal ---
+        hidePodModal();
 
-// ---------------------------------------------------------------------------
-// Boot
-// ---------------------------------------------------------------------------
-connectWS();
-setInterval(() => { if (modelTabOpened && shapLoaded) loadTrainingMetrics(); }, 60000);
-</script>
-</body>
+        // --- Switch back to Business tab ---
+        const bizTabBtn = document.querySelector(".tab-btn");
+        if (bizTabBtn) showTab("business", bizTabBtn);
+
+        // --- Start button ---
+        document.getElementById("start-btn").textContent = "▶ Start";
+      }
+
+      // ============================================================
+      // Control actions
+      // ============================================================
+      async function startPipeline() {
+        const btn = document.getElementById("start-btn");
+        btn.disabled = true;
+        btn.textContent = "…Starting";
+        try {
+          await fetch("/api/control/start", { method: "POST" });
+          showPodModal();
+        } catch (e) {
+          btn.textContent = "▶ Start";
+          btn.className = "btn-primary";
+          btn.disabled = false;
+        }
+      }
+
+      async function stopPipeline() {
+        // Clear all charts immediately on Stop click — no waiting for WebSocket
+        history.gpu_scoring.length = 0;
+        history.gpu_triton.length = 0;
+        history.gpu_prep.length = 0;
+        history.gpu_training.length = 0;
+        history.tx.length = 0;
+        history.fbLatency.length = 0;
+        history.labels.length = 0;
+        updateLineChart(txChart, [], []);
+        if (utilChart) {
+          utilChart.data.labels = [];
+          utilChart.data.datasets.forEach((ds) => (ds.data = []));
+          utilChart.update("none");
+        }
+        if (tputLatChart) {
+          tputLatChart.data.labels = [];
+          tputLatChart.data.datasets.forEach((ds) => (ds.data = []));
+          tputLatChart.update("none");
+        }
+
+        _ctlShow("Stopping Pipeline...", "Scaling all pods to zero");
+        const pods = Object.entries(SERVICE_LABELS);
+        _ctlRenderPods({}, pods, "down");
+        fetch("/api/control/stop", { method: "POST" }).catch(() => {});
+        await _ctlPoll(
+          (d) => _ctlRenderPods(d.services || {}, pods, "down"),
+          (d) =>
+            pods.every(([k]) =>
+              ["Stopped", "NotFound"].includes((d.services || {})[k]),
+            ),
+        );
+        _ctlDone(
+          "Pipeline Stopped",
+          "All pods scaled to zero. Ready to start again.",
+          null,
+          null,
+        );
+      }
+
+      async function resetPipeline() {
+        const ok = await _ctlConfirm(
+          "Reset Pipeline?",
+          "This will stop all pods, re-queue raw data for reprocessing, and clear features/scores. Models are preserved.",
+          "Confirm Reset",
+        );
+        if (!ok) return;
+        _ctlShow(
+          "Resetting Pipeline...",
+          "Stopping pods and re-queuing raw data",
+        );
+        const pods = Object.entries(SERVICE_LABELS);
+        const steps = [
+          {
+            label: "Stopping pipeline and re-queuing raw data",
+            action: () => fetch("/api/control/reset", { method: "POST" }),
+            check: async () => {
+              const d = await fetch("/api/status").then((r) => r.json());
+              _ctlRenderPods(d.services || {}, pods, "down");
+              return pods.every(([k]) =>
+                ["Stopped", "NotFound"].includes((d.services || {})[k]),
+              );
+            },
+          },
+          {
+            label: "Clearing dashboard",
+            action: async () => _clearDashboard(),
+          },
+        ];
+        await _ctlRunSteps(
+          steps,
+          "Reset Complete",
+          "Raw data re-queued. Ready for a fresh run.",
+          null,
+          null,
+        );
+      }
+
+      // ---------------------------------------------------------------------------
+      // Pod startup status bar
+      // ---------------------------------------------------------------------------
+      const SERVICE_LABELS = {
+        "data-prep": "Data Prep",
+        "model-train": "Model Train",
+        triton: "Inference",
+        scoring: "Scoring",
+      };
+
+      let podPollInterval = null;
+      let _phase2Active = false;
+      let _firstBatchSeen = false;
+
+      function showPodModal() {
+        _phase2Active = false;
+        _firstBatchSeen = false;
+        _ctlShow(
+          "Starting Pipeline...",
+          "Pods are scaling up — takes 40-60 s on first start",
+        );
+        startPodPolling();
+      }
+
+      function hidePodModal() {
+        if (_ctlTimer) {
+          clearTimeout(_ctlTimer);
+          _ctlTimer = null;
+        }
+        _phase2Active = false;
+        _firstBatchSeen = false;
+        document
+          .getElementById("pod-modal-backdrop")
+          .classList.remove("visible");
+        stopPodPolling();
+        ALL_BTNS.forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = false;
+        });
+        document.getElementById("start-btn").textContent = "▶ Start";
+      }
+
+      function startPodPolling() {
+        if (podPollInterval) return;
+        pollPodStatus();
+        podPollInterval = setInterval(pollPodStatus, 2000);
+      }
+
+      function stopPodPolling() {
+        if (podPollInterval) {
+          clearInterval(podPollInterval);
+          podPollInterval = null;
+        }
+      }
+
+      async function pollPodStatus() {
+        try {
+          const data = await fetch("/api/status").then((r) => r.json());
+          renderPodStatus(data.services || {}, data.is_running);
+        } catch (e) {}
+      }
+
+      function renderPodStatus(services, isRunning) {
+        const backdrop = document.getElementById("pod-modal-backdrop");
+        if (!backdrop.classList.contains("visible")) return;
+
+        if (!isRunning) {
+          hidePodModal();
+          return;
+        }
+
+        // Phase 2: all pods ready, waiting for first scoring batch
+        if (_phase2Active) {
+          const scored = _firstBatchSeen;
+          _ctlRenderSteps([
+            { label: "All pods ready", done: true, active: false },
+            {
+              label: "Processing features & building graph",
+              done: scored,
+              active: !scored,
+            },
+            {
+              label: "First scoring batch complete",
+              done: scored,
+              active: false,
+            },
+          ]);
+          if (scored) {
+            stopPodPolling();
+            _phase2Active = false;
+            _ctlDone(
+              "Pipeline Ready",
+              "First batch scored — dashboard is live.",
+              "View Dashboard",
+              null,
+            );
+          }
+          return;
+        }
+
+        // Phase 1: show pod readiness chips
+        _ctlRenderPods(services, Object.entries(SERVICE_LABELS), "up");
+
+        if (Object.keys(SERVICE_LABELS).every((k) => services[k] === "Ready")) {
+          _phase2Active = true;
+          document.getElementById("pod-modal-title").textContent =
+            "Warming Up...";
+          document.getElementById("pod-modal-title").style.color =
+            "var(--text)";
+          document.getElementById("pod-modal-sub").textContent =
+            "Pods ready — waiting for first scoring batch";
+          document.getElementById("pod-modal-dismiss").style.display = "none";
+          _ctlRenderSteps([
+            { label: "All pods ready", done: true, active: false },
+            {
+              label: "Processing features & building graph",
+              done: false,
+              active: true,
+            },
+            {
+              label: "First scoring batch complete",
+              done: false,
+              active: false,
+            },
+          ]);
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // Config-driven title & logos
+      // ---------------------------------------------------------------------------
+      let DEMO_CONFIG = {};
+      async function loadDemoConfig() {
+        try {
+          const r = await fetch("/static/demo_config.json").catch(() =>
+            fetch("demo_config.json"),
+          );
+          if (!r.ok) return;
+          DEMO_CONFIG = await r.json();
+
+          // Title
+          const title = document.getElementById("page-title");
+          if (title && DEMO_CONFIG.title) title.textContent = DEMO_CONFIG.title;
+
+          // Customer logo (left of title)
+          const lc = document.getElementById("logo-customer");
+          const lc_cfg = DEMO_CONFIG.logos && DEMO_CONFIG.logos.customer;
+          if (lc && lc_cfg) {
+            lc.src = lc_cfg.src;
+            lc.alt = lc_cfg.alt || "";
+            lc.style.height = (lc_cfg.height || "32") + "px";
+            lc.style.display = "block";
+          }
+
+          // NVIDIA logo (inside header-right, before buttons)
+          const ln = document.getElementById("logo-nvidia");
+          const ln_cfg = DEMO_CONFIG.logos && DEMO_CONFIG.logos.nvidia;
+          if (ln && ln_cfg) {
+            ln.src = ln_cfg.src;
+            ln.alt = ln_cfg.alt || "";
+            ln.style.height = (ln_cfg.height || "48") + "px";
+            ln.style.display = "block";
+          }
+          // KPI tooltips — keyed by tooltip element id, text set entirely from config
+          if (DEMO_CONFIG.kpi_tooltips) {
+            Object.entries(DEMO_CONFIG.kpi_tooltips).forEach(([id, text]) => {
+              const el = document.getElementById(id);
+              if (el) el.textContent = text;
+            });
+          }
+        } catch (e) {
+          console.warn("demo_config.json not available, using defaults");
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // Boot
+      // ---------------------------------------------------------------------------
+      loadDemoConfig().then(() => connectWS());
+      setInterval(() => {
+        if (modelTabOpened && shapLoaded) loadTrainingMetrics();
+      }, 60000);
+    </script>
+  </body>
 </html>

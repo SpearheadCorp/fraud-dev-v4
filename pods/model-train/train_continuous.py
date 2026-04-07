@@ -18,6 +18,7 @@ import signal
 import threading
 from pathlib import Path
 
+import requests
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
@@ -65,6 +66,7 @@ threading.Thread(target=_liveness_heartbeat, daemon=True, name="liveness").start
 # ---------------------------------------------------------------------------
 INPUT_PATH      = Path(os.environ.get("INPUT_PATH",      "/data/features"))
 MODEL_REPO      = Path(os.environ.get("MODEL_REPO",      "/data/models"))
+TRITON_HTTP_URL = os.environ.get("TRITON_HTTP_URL",      "http://triton:8000")
 MAX_FILES        = int(os.environ.get("MAX_FILES",        "200"))
 MIN_NEW_FILES    = int(os.environ.get("MIN_NEW_FILES",    "20"))
 TRAIN_INTERVAL_SEC = int(os.environ.get("TRAIN_INTERVAL_SEC", "60"))
@@ -241,8 +243,9 @@ class TritonPythonModel:
     def initialize(self, args):
         model_dir = Path(args["model_repository"]) / args["model_version"]
         self.n_tabular = N_TABULAR
-        self.gnn = GraphSAGEFraud(N_TABULAR, GNN_HIDDEN, GNN_OUT)
-        state = torch.load(str(model_dir / "state_dict_gnn.pth"), map_location="cpu",
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.gnn = GraphSAGEFraud(N_TABULAR, GNN_HIDDEN, GNN_OUT).to(self.device)
+        state = torch.load(str(model_dir / "state_dict_gnn.pth"), map_location=self.device,
                            weights_only=True)
         self.gnn.load_state_dict(state)
         self.gnn.eval()
@@ -257,13 +260,13 @@ class TritonPythonModel:
             feature_mask  = pb_utils.get_input_tensor_by_name(request, "FEATURE_MASK").as_numpy().astype(bool)
             compute_shap  = bool(pb_utils.get_input_tensor_by_name(request, "COMPUTE_SHAP").as_numpy()[0])
 
-            x  = torch.tensor(node_features, dtype=torch.float32)
-            ei = torch.tensor(edge_index,    dtype=torch.long)
+            x  = torch.tensor(node_features, dtype=torch.float32).to(self.device)
+            ei = torch.tensor(edge_index,    dtype=torch.long).to(self.device)
             n_tx = int(feature_mask.sum())
 
             with torch.no_grad():
                 all_emb = self.gnn(x, ei)
-            emb     = all_emb[feature_mask].numpy()
+            emb     = all_emb[feature_mask].cpu().numpy()
             tabular = node_features[feature_mask]
             combined = np.concatenate([tabular, emb], axis=1).astype(np.float32)
 
@@ -280,6 +283,17 @@ class TritonPythonModel:
             ]))
         return responses
 '''
+
+
+def _reload_triton_model(model_name: str) -> None:
+    """Tell Triton to unload then reload the model so it picks up new artifacts."""
+    try:
+        base = TRITON_HTTP_URL.rstrip("/")
+        requests.post(f"{base}/v2/repository/models/{model_name}/unload", timeout=10)
+        requests.post(f"{base}/v2/repository/models/{model_name}/load",   timeout=30)
+        log.info("[TRITON] Hot-reloaded model '%s'", model_name)
+    except Exception as exc:
+        log.warning("[TRITON] Hot-reload failed for '%s': %s", model_name, exc)
 
 
 def write_python_backend_config(model_dir: Path, model_name: str, kind: str) -> None:
@@ -465,6 +479,7 @@ def run_training_cycle(chunk_files: list, cycle_num: int) -> dict:
     gpu_model.get_booster().save_model(str(version_dir / "embedding_xgboost.json"))
     torch.save(gnn_state_dict, str(version_dir / "state_dict_gnn.pth"))
     log.info("[CYCLE %d] Model artifacts written to %s", cycle_num, model_dir)
+    _reload_triton_model(model_name)
 
     # Save SHAP + training metrics
     shap_path = MODEL_REPO / "shap_summary.json"

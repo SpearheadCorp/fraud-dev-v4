@@ -7,8 +7,8 @@
 #   2. Demo: data-prep + model-train + triton + scoring start concurrently
 #
 # GPU layout (1 pod per GPU, 4 GPUs total):
-#   Node .44 (slc6-lg-n3-b30-29): data-prep (GPU 0) | triton (GPU 1)
-#   Node .40 (slc6-lg-n3-b30-25): model-train (GPU 0) | scoring (GPU 1)
+#   Node .44 (slc6-lg-n3-b30-29): scoring (GPU 0) | triton (GPU 1)
+#   Node .40 (slc6-lg-n3-b30-25): data-prep (GPU 0) | model-train (GPU 1)
 
 ---
 # ── Backend ───────────────────────────────────────────────────────────────────
@@ -49,6 +49,8 @@ spec:
               value: /data/scores
             - name: MODEL_REPO_PATH
               value: /data/models
+            - name: FLASHBLADE_API_TOKEN
+              value: T-4c6c371d-2c99-4bb4-80f6-ab5e4879342a
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
@@ -58,12 +60,30 @@ spec:
               mountPath: /data/scores
             - name: model-repo
               mountPath: /data/models
+            - name: demo-config
+              mountPath: /app/static/demo_config.json
+              subPath: demo_config.json
+          resources:
+            requests:
+              ephemeral-storage: "1Gi"
+            limits:
+              ephemeral-storage: "1Gi"
           readinessProbe:
             httpGet:
-              path: /api/status
+              path: /healthz
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
       volumes:
         - name: raw-data
           persistentVolumeClaim:
@@ -77,6 +97,9 @@ spec:
         - name: model-repo
           persistentVolumeClaim:
             claimName: model-repo-pvc
+        - name: demo-config
+          configMap:
+            name: demo-config
 
 ---
 # ── data-gather (GPU — pre-demo synthetic data generation) ───────────────────
@@ -97,7 +120,9 @@ spec:
       labels:
         app: data-gather
     spec:
-      # No nodeSelector — runs pre-demo to fill /data/raw, then scales to 0 before demo
+      terminationGracePeriodSeconds: 5
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: data-gather
           image: 10.23.181.247:5000/fraud-det-v4/data-gather:latest
@@ -117,8 +142,12 @@ spec:
             - name: raw-data
               mountPath: /data/raw
           resources:
+            requests:
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "1Gi"
             limits:
               nvidia.com/gpu: "1"
+              ephemeral-storage: "1Gi"
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
@@ -131,7 +160,7 @@ spec:
             claimName: raw-data-pvc
 
 ---
-# ── data-prep (GPU — RAPIDS/cuDF mega-batch feature engineering) ─────────────
+# ── data-prep (GPU — n25 / .40) ───────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -149,8 +178,9 @@ spec:
       labels:
         app: data-prep
     spec:
-      # No nodeSelector — dedicated GPU. Mega-batch mode:
-      # concats 20 files into ~100M+ rows, processes features in one big GPU kernel.
+      terminationGracePeriodSeconds: 5
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-25
       containers:
         - name: data-prep
           image: 10.23.181.247:5000/fraud-det-v4/data-prep:latest
@@ -161,21 +191,27 @@ spec:
             - name: OUTPUT_PATH
               value: /data/features
             - name: BATCH_FILES
-              value: "10"
+              value: "5"
             - name: CUDF_SPILL
               value: "1"
             - name: RMM_ALLOCATOR
               value: "managed"
             - name: NUMBA_CACHE_DIR
               value: /data/features/.numba-cache
+            - name: WRITE_PIPES
+              value: "128"
           volumeMounts:
             - name: raw-data
               mountPath: /data/raw
             - name: features-data
               mountPath: /data/features
           resources:
+            requests:
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "1Gi"
             limits:
               nvidia.com/gpu: "1"
+              ephemeral-storage: "1Gi"
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
@@ -191,7 +227,7 @@ spec:
             claimName: features-data-pvc
 
 ---
-# ── triton (Triton Inference Server — GPU) ────────────────────────────────────
+# ── triton (GPU — n29 / .44) ──────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -207,8 +243,9 @@ spec:
       labels:
         app: triton
     spec:
+      terminationGracePeriodSeconds: 5
       nodeSelector:
-        kubernetes.io/hostname: slc6-lg-n3-b30-29   # pin to .44 — insecure registry works here
+        kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: triton
           image: 10.23.181.247:5000/fraud-det-v4/triton:latest
@@ -227,8 +264,12 @@ spec:
             - name: dshm
               mountPath: /dev/shm
           resources:
+            requests:
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "2Gi"
             limits:
               nvidia.com/gpu: "1"
+              ephemeral-storage: "2Gi"
           readinessProbe:
             httpGet:
               path: /v2/health/ready
@@ -246,7 +287,7 @@ spec:
             sizeLimit: 2Gi
 
 ---
-# ── scoring (GPU — calls Triton via HTTP, dedicated GPU) ─────────────────────
+# ── scoring (GPU — n29 / .44) ─────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -262,7 +303,9 @@ spec:
       labels:
         app: scoring
     spec:
-      # No nodeSelector — scheduler places on available GPU
+      terminationGracePeriodSeconds: 5
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-29
       containers:
         - name: scoring
           image: 10.23.181.247:5000/fraud-det-v4/scoring:latest
@@ -273,27 +316,34 @@ spec:
             - name: SCORES_PATH
               value: /data/scores
             - name: TRITON_URL
-              value: triton:8000
+              value: triton:8001
             - name: MODEL_NAME
               value: fraud_gnn_gpu
             - name: WINDOW_CHUNKS
               value: "2"
             - name: TRITON_RETRIES
-              value: "30"
+              value: "120"
+            - name: BATCH_FILES
+              value: "2"
           volumeMounts:
             - name: features-data
               mountPath: /data/features
             - name: scores-data
               mountPath: /data/scores
           resources:
+            requests:
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "1Gi"
             limits:
               nvidia.com/gpu: "1"
+              ephemeral-storage: "1Gi"
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
+            timeoutSeconds: 10
       volumes:
         - name: features-data
           persistentVolumeClaim:
@@ -303,7 +353,7 @@ spec:
             claimName: features-cpu-data-pvc   # repurposed as scores storage
 
 ---
-# ── model-train (GPU — continuous GNN + XGBoost training) ─────────────────────
+# ── model-train (GPU — n25 / .40) ─────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -321,8 +371,9 @@ spec:
       labels:
         app: model-train
     spec:
-      # No nodeSelector — placed by GPU scheduler. Normally lands on .40 since
-      # .44's 2 GPUs are used by data-prep + triton.
+      terminationGracePeriodSeconds: 5
+      nodeSelector:
+        kubernetes.io/hostname: slc6-lg-n3-b30-25
       containers:
         - name: model-train
           image: 10.23.181.247:5000/fraud-det-v4/model-train:latest
@@ -352,14 +403,19 @@ spec:
             - name: model-repo
               mountPath: /data/models
           resources:
+            requests:
+              nvidia.com/gpu: "1"
+              ephemeral-storage: "1Gi"
             limits:
               nvidia.com/gpu: "1"
+              ephemeral-storage: "1Gi"
           livenessProbe:
             exec:
               command: ["python3", "-c", "import os,time; assert time.time()-os.path.getmtime('/tmp/.healthy')<120"]
             initialDelaySeconds: 60
             periodSeconds: 15
             failureThreshold: 2
+            timeoutSeconds: 10
       volumes:
         - name: features-data
           persistentVolumeClaim:
